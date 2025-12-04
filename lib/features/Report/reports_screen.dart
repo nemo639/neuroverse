@@ -13,14 +13,17 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
   late AnimationController _pageController;
   int _selectedNavIndex = 2; // Reports is selected
 
-  // Design colors
-  static const Color bgColor = Color(0xFF121212);
-  static const Color cardColor = Color(0xFF1E1E1E);
-  static const Color cardColorLight = Color(0xFF2A2A2A);
+  // Design colors matching home screen
+  static const Color bgColor = Color(0xFFF7F7F7);
+  static const Color mintGreen = Color(0xFFB8E8D1);
+  static const Color softLavender = Color(0xFFE8DFF0);
+  static const Color creamBeige = Color(0xFFF5EBE0);
+  static const Color softYellow = Color(0xFFFFF3CD);
+  static const Color darkCard = Color(0xFF1A1A1A);
+  static const Color navBg = Color(0xFFFAFAFA);
   static const Color blueAccent = Color(0xFF3B82F6);
   static const Color purpleAccent = Color(0xFF8B5CF6);
-  static const Color mintGreen = Color(0xFFB8E8D1);
-  static const Color navBg = Color(0xFF1A1A1A);
+  static const Color greenAccent = Color(0xFF10B981);
 
   // Reports data
   final List<ReportItem> reports = [
@@ -31,6 +34,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       adRisk: 23,
       pdRisk: 18,
       isReady: true,
+      iconColor: Color(0xFF8B5CF6),
+      iconBgColor: Color(0xFFF3E8FF),
     ),
     ReportItem(
       title: 'Speech & Cognitive Analysis',
@@ -39,6 +44,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       adRisk: 19,
       pdRisk: 15,
       isReady: true,
+      iconColor: Color(0xFF3B82F6),
+      iconBgColor: Color(0xFFDBEAFE),
     ),
     ReportItem(
       title: 'Motor & Gait Evaluation',
@@ -47,6 +54,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       adRisk: 19,
       pdRisk: 17,
       isReady: true,
+      iconColor: Color(0xFFF97316),
+      iconBgColor: Color(0xFFFFF7ED),
     ),
   ];
 
@@ -61,7 +70,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
+        statusBarIconBrightness: Brightness.dark,
       ),
     );
   }
@@ -86,7 +95,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
         setState(() => _selectedNavIndex = index);
         break;
       case 3:
-        Navigator.pushNamed(context, '/wellness');
+        Navigator.pushNamed(context, '/XAI');
         break;
       case 4:
         Navigator.pushNamed(context, '/profile');
@@ -132,25 +141,46 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       delay: 0.0,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Assessment Reports',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                letterSpacing: -1,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Assessment Reports',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                      letterSpacing: -1,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Downloadable PDF reports with AI insights',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black.withOpacity(0.5),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              'Downloadable PDF reports with AI insights',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.white.withOpacity(0.5),
+            const SizedBox(width: 12),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: darkCard,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(
+                Icons.description_rounded,
+                color: Colors.white,
+                size: 24,
               ),
             ),
           ],
@@ -167,68 +197,62 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                cardColor,
-                cardColor,
-                purpleAccent.withOpacity(0.3),
-              ],
-            ),
+            color: darkCard,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: purpleAccent.withOpacity(0.2),
-              width: 1,
-            ),
+            boxShadow: [
+              BoxShadow(
+                color: darkCard.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Total Reports Generated',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white.withOpacity(0.6),
-                      ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Total Reports Generated',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white.withOpacity(0.6),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      '12',
-                      style: TextStyle(
-                        fontSize: 42,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: -1,
-                      ),
+                  ),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: mintGreen,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        _buildMiniStat('This Month', '3'),
-                        const SizedBox(width: 24),
-                        _buildMiniStat('Shared', '5'),
-                      ],
+                    child: const Icon(
+                      Icons.insert_chart_rounded,
+                      color: Colors.black87,
+                      size: 20,
                     ),
-                  ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '12',
+                style: TextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: -2,
                 ),
               ),
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: purpleAccent.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  Icons.description_rounded,
-                  color: purpleAccent,
-                  size: 28,
-                ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  _buildMiniStat('This Month', '3', mintGreen),
+                  const SizedBox(width: 16),
+                  _buildMiniStat('Shared', '5', softLavender),
+                ],
               ),
             ],
           ),
@@ -237,28 +261,35 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildMiniStat(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: Colors.white.withOpacity(0.4),
+  Widget _buildMiniStat(String label, String value, Color bgColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: Colors.white.withOpacity(0.5),
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -281,11 +312,16 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: cardColorLight,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.06),
-          ),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 15,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,15 +331,15 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 46,
+                  height: 46,
                   decoration: BoxDecoration(
-                    color: blueAccent.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
+                    color: report.iconBgColor,
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
                     Icons.description_rounded,
-                    color: blueAccent,
+                    color: report.iconColor,
                     size: 22,
                   ),
                 ),
@@ -317,7 +353,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: Colors.black87,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -328,7 +364,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                           Icon(
                             Icons.calendar_today_rounded,
                             size: 12,
-                            color: Colors.white.withOpacity(0.4),
+                            color: Colors.black.withOpacity(0.4),
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -336,7 +372,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
-                              color: Colors.white.withOpacity(0.4),
+                              color: Colors.black.withOpacity(0.4),
                             ),
                           ),
                         ],
@@ -350,16 +386,36 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
             // Badges row
             Row(
               children: [
-                _buildBadge(
-                  'Ready',
-                  blueAccent,
-                  blueAccent.withOpacity(0.15),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: greenAccent.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Ready',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: greenAccent,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                _buildBadge(
-                  '${report.testsCount} tests',
-                  Colors.white.withOpacity(0.6),
-                  Colors.white.withOpacity(0.08),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${report.testsCount} tests',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black.withOpacity(0.5),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -368,7 +424,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.3),
+                color: bgColor,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Row(
@@ -378,8 +434,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                   ),
                   Container(
                     width: 1,
-                    height: 36,
-                    color: Colors.white.withOpacity(0.1),
+                    height: 40,
+                    color: Colors.black.withOpacity(0.08),
                   ),
                   Expanded(
                     child: _buildRiskScore('PD Risk', report.pdRisk),
@@ -402,17 +458,24 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                       decoration: BoxDecoration(
                         color: blueAccent,
                         borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: blueAccent.withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.download_rounded,
                             color: Colors.white,
                             size: 18,
                           ),
-                          const SizedBox(width: 6),
-                          const Text(
+                          SizedBox(width: 6),
+                          Text(
                             'Download',
                             style: TextStyle(
                               fontSize: 13,
@@ -435,10 +498,10 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.black.withOpacity(0.1),
                         ),
                       ),
                       child: Row(
@@ -446,7 +509,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                         children: [
                           Icon(
                             Icons.share_rounded,
-                            color: Colors.white.withOpacity(0.8),
+                            color: Colors.black.withOpacity(0.7),
                             size: 18,
                           ),
                           const SizedBox(width: 6),
@@ -455,7 +518,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.black.withOpacity(0.7),
                             ),
                           ),
                         ],
@@ -471,24 +534,6 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildBadge(String text, Color textColor, Color bgColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: textColor,
-        ),
-      ),
-    );
-  }
-
   Widget _buildRiskScore(String label, int score) {
     return Column(
       children: [
@@ -497,7 +542,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w500,
-            color: Colors.white.withOpacity(0.4),
+            color: Colors.black.withOpacity(0.4),
           ),
         ),
         const SizedBox(height: 4),
@@ -507,9 +552,9 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               TextSpan(
                 text: '$score',
                 style: const TextStyle(
-                  fontSize: 22,
+                  fontSize: 24,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  color: Colors.black87,
                 ),
               ),
               TextSpan(
@@ -517,7 +562,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: Colors.white.withOpacity(0.4),
+                  color: Colors.black.withOpacity(0.4),
                 ),
               ),
             ],
@@ -541,32 +586,33 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  blueAccent,
-                  purpleAccent,
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
+              color: darkCard,
+              borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
-                  color: purpleAccent.withOpacity(0.4),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
+                  color: darkCard.withOpacity(0.3),
+                  blurRadius: 15,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(
-                  Icons.add_rounded,
-                  color: Colors.white,
-                  size: 22,
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: mintGreen,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.add_rounded,
+                    color: Colors.black87,
+                    size: 18,
+                  ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 const Text(
                   'Generate New Report',
                   style: TextStyle(
@@ -589,10 +635,10 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       decoration: BoxDecoration(
         color: navBg,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withOpacity(0.08),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -608,7 +654,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
               _buildNavItem(0, Icons.home_rounded, 'Home'),
               _buildNavItem(1, Icons.assignment_outlined, 'Tests'),
               _buildNavItem(2, Icons.analytics_outlined, 'Reports'),
-              _buildNavItem(3, Icons.favorite_outline_rounded, 'Wellness'),
+              _buildNavItem(3, Icons.auto_awesome_rounded, 'XAI'),
               _buildNavItem(4, Icons.person_outline_rounded, 'Profile'),
             ],
           ),
@@ -625,7 +671,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
+          color: isSelected ? darkCard : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -633,7 +679,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
           children: [
             Icon(
               icon,
-              color: isSelected ? Colors.black87 : Colors.white38,
+              color: isSelected ? Colors.white : Colors.black38,
               size: 22,
             ),
             if (isSelected) ...[
@@ -643,7 +689,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+                  color: Colors.white,
                 ),
               ),
             ],
@@ -681,6 +727,8 @@ class ReportItem {
   final int adRisk;
   final int pdRisk;
   final bool isReady;
+  final Color iconColor;
+  final Color iconBgColor;
 
   ReportItem({
     required this.title,
@@ -689,5 +737,7 @@ class ReportItem {
     required this.adRisk,
     required this.pdRisk,
     required this.isReady,
+    required this.iconColor,
+    required this.iconBgColor,
   });
 }

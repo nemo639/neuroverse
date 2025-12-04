@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:neuroverse/features/Home/home.dart';
-import 'package:neuroverse/features/Report/reports_screen.dart';
 import 'package:neuroverse/features/auth/login.dart';
+import 'package:neuroverse/features/auth/register.dart';
+import 'package:neuroverse/features/auth/forgot_password_screen.dart';
 import 'package:neuroverse/features/profile/profile.dart';
 import 'package:neuroverse/features/profile/edit_profile.dart';
 import 'package:neuroverse/features/labs/testsscreen.dart';
@@ -10,7 +11,8 @@ import 'package:neuroverse/features/labs/speech_language_test.dart';
 import 'package:neuroverse/features/labs/cognitive_memory_test.dart';
 import 'package:neuroverse/features/labs/motor_functions_test.dart';
 import 'package:neuroverse/features/labs/gait_movement_test.dart';
-
+import 'package:neuroverse/features/report/reports_screen.dart';
+import 'package:neuroverse/features/xai/xai.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +46,8 @@ class MyApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const LoginScreen(),
+        '/register': (context) => const SignUpScreen(),
+        '/forgot-password_screen': (context) => const ForgotPasswordScreen(),
         '/home': (context) => const HomeScreen(),
         '/profile': (context) => const ProfileScreen(),
         '/edit-profile': (context) => const EditProfileScreen(),
@@ -53,6 +57,7 @@ class MyApp extends StatelessWidget {
         '/test/motor-functions': (context) => const MotorFunctionsTestScreen(),
         '/test/gait-movement': (context) => const GaitMovementTestScreen(),
         '/reports': (context) => const ReportsScreen(),
+        '/XAI': (context) => const XAIScreen(),
       },
     );
   }

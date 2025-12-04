@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         Navigator.pushNamed(context, '/reports');
         break;
       case 3: // Wellness
-        Navigator.pushNamed(context, '/wellness');
+        Navigator.pushNamed(context, '/XAI');
         break;
       case 4: // Profile
         Navigator.pushNamed(context, '/profile');
@@ -1012,7 +1012,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               _buildNavItem(0, Icons.home_rounded, 'Home'),
               _buildNavItem(1, Icons.assignment_outlined, 'Tests'),
               _buildNavItem(2, Icons.analytics_outlined, 'Reports'),
-              _buildNavItem(3, Icons.favorite_outline_rounded, 'Wellness'),
+              _buildNavItem(3, Icons.auto_awesome_rounded, 'XAI'),
               _buildNavItem(4, Icons.person_outline_rounded, 'Profile'),
             ],
           ),
