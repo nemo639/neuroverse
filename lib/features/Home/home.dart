@@ -60,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       case 2: // Reports
         Navigator.pushNamed(context, '/reports');
         break;
-      case 3: // Wellness
+      case 3: // XAI
         Navigator.pushNamed(context, '/XAI');
         break;
       case 4: // Profile
@@ -95,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     const SizedBox(height: 24),
                     _buildRecentTestsSection(),
                     const SizedBox(height: 20),
-                    _buildExplainableAICard(),
+                    _buildDigitalWellnessCard(),
                     const SizedBox(height: 20),
                     _buildWellnessCard(),
                     const SizedBox(height: 24),
@@ -796,13 +796,430 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildDigitalWellnessCard() {
+    return _buildAnimatedWidget(
+      delay: 0.3,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: Colors.black.withOpacity(0.06)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Header Section with gradient accent
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      softLavender.withOpacity(0.5),
+                      mintGreen.withOpacity(0.3),
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: darkCard,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF10B981),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Text(
+                                    "Today's Screen Time",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            const Text(
+                              '5.2',
+                              style: TextStyle(
+                                fontSize: 48,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.black87,
+                                height: 1,
+                                letterSpacing: -2,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                'hours',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black.withOpacity(0.4),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFF10B981).withOpacity(0.3),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.trending_down_rounded,
+                                size: 14,
+                                color: Color(0xFF10B981),
+                              ),
+                              SizedBox(width: 5),
+                              Text(
+                                '12% below limit',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF10B981),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      width: 70,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        color: creamBeige,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.black.withOpacity(0.06),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: creamBeige.withOpacity(0.5),
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.phone_android_rounded,
+                        color: Colors.black54,
+                        size: 32,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Stats Row
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    _buildWellnessStatCard(
+                      icon: Icons.phone_android_rounded,
+                      label: 'Screen',
+                      value: '5.2h',
+                      bgColor: softLavender,
+                      iconColor: const Color(0xFF8B5CF6),
+                    ),
+                    const SizedBox(width: 10),
+                    _buildWellnessStatCard(
+                      icon: Icons.sports_esports_rounded,
+                      label: 'Gaming',
+                      value: '1.5h',
+                      bgColor: const Color(0xFFFFE4E6),
+                      iconColor: const Color(0xFFEC4899),
+                    ),
+                    const SizedBox(width: 10),
+                    _buildWellnessStatCard(
+                      icon: Icons.bedtime_rounded,
+                      label: 'Sleep',
+                      value: '7.2h',
+                      bgColor: mintGreen,
+                      iconColor: const Color(0xFF10B981),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Weekly Patterns
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: darkCard,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: darkCard.withOpacity(0.2),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.bar_chart_rounded,
+                              color: Colors.white70,
+                              size: 18,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Weekly Patterns',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'This Week',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white60,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    // Bar Chart
+                    SizedBox(
+                      height: 85,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _buildWeeklyBar('Mon', 0.6, false),
+                          _buildWeeklyBar('Tue', 0.75, false),
+                          _buildWeeklyBar('Wed', 0.5, false),
+                          _buildWeeklyBar('Thu', 0.85, false),
+                          _buildWeeklyBar('Fri', 0.7, true), // Today
+                          _buildWeeklyBar('Sat', 0.4, false),
+                          _buildWeeklyBar('Sun', 0.3, false),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: mintGreen,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Screen Time',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withOpacity(0.5),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: softLavender,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Today',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withOpacity(0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWellnessStatCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color bgColor,
+    required Color iconColor,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          color: bgColor.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: bgColor),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: iconColor.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(icon, size: 20, color: iconColor),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.black.withOpacity(0.4),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeeklyBar(String day, double value, bool isToday) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Container(
+          width: 30,
+          height: 55 * value,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: isToday
+                  ? [softLavender, softLavender.withOpacity(0.6)]
+                  : [mintGreen, mintGreen.withOpacity(0.6)],
+            ),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: isToday
+                ? [
+                    BoxShadow(
+                      color: softLavender.withOpacity(0.5),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          day,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+            color: isToday ? Colors.white : Colors.white.withOpacity(0.5),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildExplainableAICard() {
     return _buildAnimatedWidget(
       delay: 0.3,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: GestureDetector(
-          onTap: () => HapticFeedback.lightImpact(),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.pushNamed(context, '/xai');
+          },
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(

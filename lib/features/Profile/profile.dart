@@ -472,39 +472,648 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               ),
               _buildMenuDivider(),
               _buildMenuItem(
-                icon: Icons.palette_outlined,
-                title: 'Change Theme',
-                iconBgColor: const Color(0xFF10B981),
-              ),
-              _buildMenuDivider(),
-              _buildMenuItem(
                 icon: Icons.notifications_none_rounded,
                 title: 'Notifications',
                 iconBgColor: const Color(0xFFF59E0B),
                 badge: '3',
+                onTap: () => _showNotificationsSheet(),
               ),
               _buildMenuDivider(),
               _buildMenuItem(
                 icon: Icons.shield_outlined,
                 title: 'Privacy & Security',
                 iconBgColor: const Color(0xFFF97316),
+                onTap: () => _showPrivacySheet(),
               ),
               _buildMenuDivider(),
               _buildMenuItem(
-                icon: Icons.settings_outlined,
-                title: 'App Settings',
-                iconBgColor: const Color(0xFF6B7280),
+                icon: Icons.description_outlined,
+                title: 'Terms & Conditions',
+                iconBgColor: const Color(0xFF8B5CF6),
+                onTap: () => _showTermsDialog(),
+              ),
+              _buildMenuDivider(),
+              _buildMenuItem(
+                icon: Icons.policy_outlined,
+                title: 'Privacy Policy',
+                iconBgColor: const Color(0xFF10B981),
+                onTap: () => _showPrivacyPolicyDialog(),
               ),
               _buildMenuDivider(),
               _buildMenuItem(
                 icon: Icons.help_outline_rounded,
                 title: 'Help & Support',
                 iconBgColor: blueAccent,
+                onTap: () => _showHelpSheet(),
+              ),
+              _buildMenuDivider(),
+              _buildMenuItem(
+                icon: Icons.info_outline_rounded,
+                title: 'About App',
+                iconBgColor: const Color(0xFF6B7280),
                 isLast: true,
+                onTap: () => _showAboutDialog(),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showNotificationsSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Notification Settings',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 24),
+            _buildNotificationToggle('Push Notifications', 'Get alerts for test reminders', true),
+            _buildNotificationToggle('Email Notifications', 'Receive reports via email', true),
+            _buildNotificationToggle('Weekly Summary', 'Get weekly progress updates', false),
+            _buildNotificationToggle('Marketing', 'News and special offers', false),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationToggle(String title, String subtitle, bool value) {
+    return StatefulBuilder(
+      builder: (context, setState) => Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: (val) => setState(() {}),
+              activeColor: const Color(0xFF10B981),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPrivacySheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Privacy & Security',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Expanded(
+              child: ListView(
+                children: [
+                  _buildPrivacyOption(Icons.fingerprint_rounded, 'Biometric Login', 'Use fingerprint or face ID'),
+                  _buildPrivacyOption(Icons.lock_outline_rounded, 'Change Password', 'Update your password'),
+                  _buildPrivacyOption(Icons.visibility_off_outlined, 'Data Visibility', 'Control who sees your data'),
+                  _buildPrivacyOption(Icons.delete_outline_rounded, 'Delete Account', 'Permanently remove your data'),
+                  _buildPrivacyOption(Icons.download_outlined, 'Export Data', 'Download your health data'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrivacyOption(IconData icon, String title, String subtitle) {
+    return GestureDetector(
+      onTap: () => HapticFeedback.lightImpact(),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 22, color: Colors.black54),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: Colors.black.withOpacity(0.3)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showHelpSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Help & Support',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 24),
+            _buildHelpOption(Icons.article_outlined, 'FAQs', 'Common questions answered'),
+            _buildHelpOption(Icons.chat_bubble_outline_rounded, 'Contact Support', 'Get help from our team'),
+            _buildHelpOption(Icons.video_library_outlined, 'Video Tutorials', 'Learn how to use the app'),
+            _buildHelpOption(Icons.bug_report_outlined, 'Report a Bug', 'Help us improve'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHelpOption(IconData icon, String title, String subtitle) {
+    return GestureDetector(
+      onTap: () => HapticFeedback.lightImpact(),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: blueAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 22, color: blueAccent),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.black.withOpacity(0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: Colors.black.withOpacity(0.3)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTermsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxHeight: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Terms & Conditions',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.close, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildTermsSection(
+                        '1. Medical Disclaimer',
+                        'NeuroVerse is a screening tool designed to assist in early detection of neurological conditions. This app does NOT provide medical diagnosis. Results should be reviewed by qualified healthcare professionals. Never disregard professional medical advice based on app results.',
+                      ),
+                      _buildTermsSection(
+                        '2. Data Collection & Usage',
+                        'We collect neurological assessment data including speech patterns, motor function measurements, cognitive test results, and digital wellness metrics. This data is encrypted using AES-256 encryption and stored securely on HIPAA-compliant servers.',
+                      ),
+                      _buildTermsSection(
+                        '3. AI & Machine Learning',
+                        'Our AI models analyze your assessment data to generate risk scores. These models are trained on anonymized clinical data and are continuously improved. AI predictions have accuracy limitations and should not replace clinical evaluation.',
+                      ),
+                      _buildTermsSection(
+                        '4. Research Participation',
+                        'Anonymized data may be used for neurodegenerative disease research to improve detection algorithms. You can opt-out of research participation in Privacy Settings without affecting app functionality.',
+                      ),
+                      _buildTermsSection(
+                        '5. User Responsibilities',
+                        'You agree to provide accurate information, complete assessments as instructed, and use the app for its intended purpose. Misuse of the app or manipulation of results is prohibited.',
+                      ),
+                      _buildTermsSection(
+                        '6. Limitation of Liability',
+                        'NeuroVerse and its developers are not liable for any decisions made based on app results. The app is provided "as is" without warranties of any kind.',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: darkCard,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'I Understand',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPrivacyPolicyDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxHeight: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Privacy Policy',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.close, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildTermsSection(
+                        '1. Information We Collect',
+                        '• Personal Information: Name, email, phone, date of birth\n• Health Data: Assessment results, risk scores, test recordings\n• Device Data: Device type, OS version, app usage analytics\n• Digital Wellness: Screen time (with permission)',
+                      ),
+                      _buildTermsSection(
+                        '2. How We Use Your Data',
+                        '• Generate personalized health risk assessments\n• Improve AI detection algorithms\n• Send important health notifications\n• Provide customer support\n• Conduct anonymized medical research',
+                      ),
+                      _buildTermsSection(
+                        '3. Data Storage & Security',
+                        'All data is encrypted in transit (TLS 1.3) and at rest (AES-256). We use HIPAA-compliant cloud infrastructure. Data is stored for the duration of your account unless deletion is requested.',
+                      ),
+                      _buildTermsSection(
+                        '4. Data Sharing',
+                        'We do NOT sell your personal data. Data may be shared with:\n• Healthcare providers (with your consent)\n• Research institutions (anonymized only)\n• Legal authorities (when required by law)',
+                      ),
+                      _buildTermsSection(
+                        '5. Your Rights',
+                        '• Access your data anytime\n• Request data deletion\n• Export your health records\n• Opt-out of research participation\n• Update or correct your information',
+                      ),
+                      _buildTermsSection(
+                        '6. Contact Us',
+                        'For privacy concerns or data requests:\nEmail: privacy@neuroverse.pk\nPhone: +92 300 1234567',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: darkCard,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Close',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: darkCard,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Center(
+                  child: CustomPaint(
+                    size: const Size(40, 40),
+                    painter: BrainLogoPainter(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'NeuroVerse',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Version 1.0.0',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.black.withOpacity(0.5),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'AI-powered neurological health screening for early detection of Alzheimer\'s and Parkinson\'s disease.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.black.withOpacity(0.6),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: darkCard,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Close',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTermsSection(String title, String content) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            content,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.black.withOpacity(0.6),
+              height: 1.6,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -727,4 +1336,75 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       ),
     );
   }
+}
+
+class BrainLogoPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFB8E8D1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+
+    // Left hemisphere
+    final leftPath = Path();
+    leftPath.moveTo(centerX - 2, centerY - size.height * 0.35);
+    leftPath.cubicTo(
+      centerX - size.width * 0.4, centerY - size.height * 0.3,
+      centerX - size.width * 0.45, centerY + size.height * 0.2,
+      centerX - 2, centerY + size.height * 0.35,
+    );
+    canvas.drawPath(leftPath, paint);
+
+    // Right hemisphere
+    final rightPath = Path();
+    rightPath.moveTo(centerX + 2, centerY - size.height * 0.35);
+    rightPath.cubicTo(
+      centerX + size.width * 0.4, centerY - size.height * 0.3,
+      centerX + size.width * 0.45, centerY + size.height * 0.2,
+      centerX + 2, centerY + size.height * 0.35,
+    );
+    canvas.drawPath(rightPath, paint);
+
+    // Center line
+    canvas.drawLine(
+      Offset(centerX, centerY - size.height * 0.3),
+      Offset(centerX, centerY + size.height * 0.3),
+      paint,
+    );
+
+    // Neural connections
+    paint.strokeWidth = 1.5;
+    
+    // Left side connections
+    canvas.drawLine(
+      Offset(centerX - size.width * 0.15, centerY - size.height * 0.1),
+      Offset(centerX - size.width * 0.3, centerY - size.height * 0.15),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(centerX - size.width * 0.15, centerY + size.height * 0.1),
+      Offset(centerX - size.width * 0.3, centerY + size.height * 0.15),
+      paint,
+    );
+
+    // Right side connections
+    canvas.drawLine(
+      Offset(centerX + size.width * 0.15, centerY - size.height * 0.1),
+      Offset(centerX + size.width * 0.3, centerY - size.height * 0.15),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(centerX + size.width * 0.15, centerY + size.height * 0.1),
+      Offset(centerX + size.width * 0.3, centerY + size.height * 0.15),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

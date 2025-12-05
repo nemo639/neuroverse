@@ -339,19 +339,26 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
   }
 
   Future<void> _handleSignUp() async {
-    if (_validateStep2()) {
-      setState(() => isLoading = true);
-      
-      await Future.delayed(const Duration(milliseconds: 2000));
-      
-      setState(() => isLoading = false);
-      
-      if (mounted) {
-        // Navigate to OTP verification
-        Navigator.pushReplacementNamed(context, '/home');
-      }
+  if (_validateStep2()) {
+    setState(() => isLoading = true);
+
+    await Future.delayed(const Duration(milliseconds: 2000));
+
+    setState(() => isLoading = false);
+
+    if (mounted) {
+      // Navigate to OTP verification and pass the email + type expected by main.dart
+      Navigator.pushReplacementNamed(
+        context,
+        '/otp-verification',
+        arguments: {
+          'email': emailController.text.trim(),
+          'type': 'signup',
+        },
+      );
     }
   }
+}
 
   Future<void> _selectDate() async {
     HapticFeedback.selectionClick();
@@ -998,14 +1005,15 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
   }
 
   Widget _buildTermsCheckbox() {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() => agreeToTerms = !agreeToTerms);
-      },
-      child: Row(
-        children: [
-          AnimatedContainer(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() => agreeToTerms = !agreeToTerms);
+          },
+          child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             width: 24,
             height: 24,
@@ -1021,33 +1029,595 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
                 ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
                 : null,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Wrap(
+            children: [
+              Text(
+                "I agree to the ",
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.black.withOpacity(0.5),
                   fontWeight: FontWeight.w500,
                 ),
-                children: [
-                  const TextSpan(text: "I agree to the "),
-                  TextSpan(
-                    text: "Terms & Conditions",
-                    style: TextStyle(
-                      color: blueAccent,
-                      fontWeight: FontWeight.w700,
-                    ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  _showTermsDialog();
+                },
+                child: const Text(
+                  "Terms & Conditions",
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: blueAccent,
+                    fontWeight: FontWeight.w700,
+                    decoration: TextDecoration.underline,
+                    decorationColor: blueAccent,
                   ),
-                  const TextSpan(text: " and "),
-                  TextSpan(
-                    text: "Privacy Policy",
-                    style: TextStyle(
-                      color: blueAccent,
-                      fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                " and ",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.black.withOpacity(0.5),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  _showPrivacyPolicyDialog();
+                },
+                child: const Text(
+                  "Privacy Policy",
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: blueAccent,
+                    fontWeight: FontWeight.w700,
+                    decoration: TextDecoration.underline,
+                    decorationColor: blueAccent,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showTermsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.description_outlined,
+                          color: Color(0xFF8B5CF6),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Terms & Conditions',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.close, size: 18),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 20),
+              Flexible(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildTermsSection(
+                        '1. Medical Disclaimer',
+                        'NeuroVerse is a digital health screening tool designed to assist in the early detection of neurological conditions including Alzheimer\'s disease and Parkinson\'s disease.\n\n'
+                        '⚠️ IMPORTANT: This application does NOT provide medical diagnosis. All results generated by our AI algorithms are preliminary assessments and must be reviewed and confirmed by qualified healthcare professionals.\n\n'
+                        'Never disregard professional medical advice or delay seeking treatment based on results from this application.',
+                        Icons.medical_services_outlined,
+                        const Color(0xFFEF4444),
+                      ),
+                      _buildTermsSection(
+                        '2. Health Data Collection',
+                        'By using NeuroVerse, you consent to the collection and processing of the following health-related data:\n\n'
+                        '• Speech & Language Patterns: Voice recordings, speech fluency, pause analysis\n'
+                        '• Motor Function Data: Tremor measurements, drawing patterns, tap accuracy\n'
+                        '• Cognitive Assessment Results: Memory tests, reaction times, attention scores\n'
+                        '• Facial Analysis Data: Expression patterns, blink rates, muscle movements\n'
+                        '• Digital Wellness Metrics: Screen time, app usage patterns',
+                        Icons.health_and_safety_outlined,
+                        const Color(0xFF3B82F6),
+                      ),
+                      _buildTermsSection(
+                        '3. AI & Machine Learning',
+                        'Our AI models are trained on clinical datasets and use the following approaches:\n\n'
+                        '• Deep Learning: Neural networks analyze multimodal biomarkers\n'
+                        '• Explainable AI (XAI): SHAP values and saliency maps provide transparency\n'
+                        '• Continuous Learning: Models are updated with anonymized clinical data\n\n'
+                        'AI predictions have inherent limitations. Sensitivity: 87%, Specificity: 92% based on validation studies. These metrics may vary across populations.',
+                        Icons.psychology_outlined,
+                        const Color(0xFF8B5CF6),
+                      ),
+                      _buildTermsSection(
+                        '4. Research Participation',
+                        'Your anonymized data may contribute to neurodegenerative disease research:\n\n'
+                        '• Data is de-identified using industry-standard methods\n'
+                        '• Research aims to improve early detection algorithms\n'
+                        '• Partnerships with accredited medical institutions\n'
+                        '• You may opt-out at any time without affecting app functionality\n\n'
+                        'Research participation is optional and can be managed in Privacy Settings.',
+                        Icons.science_outlined,
+                        const Color(0xFF10B981),
+                      ),
+                      _buildTermsSection(
+                        '5. User Responsibilities',
+                        'As a user of NeuroVerse, you agree to:\n\n'
+                        '• Provide accurate personal and health information\n'
+                        '• Complete assessments as instructed for reliable results\n'
+                        '• Use the app only for its intended health screening purpose\n'
+                        '• Not share your account credentials with others\n'
+                        '• Report any technical issues or inaccurate results\n'
+                        '• Seek professional medical advice for any health concerns',
+                        Icons.verified_user_outlined,
+                        const Color(0xFFF59E0B),
+                      ),
+                      _buildTermsSection(
+                        '6. Limitation of Liability',
+                        'NeuroVerse and its developers, partners, and affiliates:\n\n'
+                        '• Are NOT liable for any medical decisions made based on app results\n'
+                        '• Do not guarantee the accuracy of AI predictions\n'
+                        '• Provide the app "as is" without warranties of any kind\n'
+                        '• Are not responsible for delays in seeking proper medical care\n\n'
+                        'Maximum liability is limited to the amount paid for the service.',
+                        Icons.gavel_outlined,
+                        const Color(0xFF6B7280),
+                      ),
+                      _buildTermsSection(
+                        '7. Updates & Modifications',
+                        'We reserve the right to:\n\n'
+                        '• Update these terms with 30 days notice via email\n'
+                        '• Modify app features and functionality\n'
+                        '• Update AI models and algorithms\n'
+                        '• Change pricing with reasonable notice\n\n'
+                        'Continued use after changes constitutes acceptance.',
+                        Icons.update_outlined,
+                        const Color(0xFFEC4899),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.black.withOpacity(0.1)),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Close',
+                            style: TextStyle(
+                              color: Colors.black54,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() => agreeToTerms = true);
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: darkCard,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'I Accept',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPrivacyPolicyDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.policy_outlined,
+                          color: Color(0xFF10B981),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Privacy Policy',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.close, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Flexible(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // HIPAA Notice
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3B82F6).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: const Color(0xFF3B82F6).withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.verified_user_rounded,
+                                color: Color(0xFF3B82F6),
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'HIPAA Compliant',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF3B82F6),
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Your health data is protected under medical privacy standards',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF3B82F6),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      _buildTermsSection(
+                        '1. Information We Collect',
+                        'Personal Information:\n'
+                        '• Name, email address, phone number\n'
+                        '• Date of birth, gender\n'
+                        '• Profile photo (optional)\n\n'
+                        'Health & Medical Data:\n'
+                        '• Neurological assessment results\n'
+                        '• Risk scores and AI predictions\n'
+                        '• Voice recordings for speech analysis\n'
+                        '• Motor function test data\n'
+                        '• Cognitive test performance\n\n'
+                        'Device & Usage Data:\n'
+                        '• Device type, operating system\n'
+                        '• App usage analytics\n'
+                        '• Screen time metrics (with permission)',
+                        Icons.folder_outlined,
+                        const Color(0xFF3B82F6),
+                      ),
+                      _buildTermsSection(
+                        '2. How We Use Your Data',
+                        'Primary Uses:\n'
+                        '• Generate personalized health risk assessments\n'
+                        '• Track your neurological health over time\n'
+                        '• Provide AI-powered insights and recommendations\n'
+                        '• Send important health notifications\n\n'
+                        'Secondary Uses:\n'
+                        '• Improve AI detection algorithms (anonymized)\n'
+                        '• Conduct medical research (with consent)\n'
+                        '• Provide customer support\n'
+                        '• Comply with legal requirements',
+                        Icons.analytics_outlined,
+                        const Color(0xFF8B5CF6),
+                      ),
+                      _buildTermsSection(
+                        '3. Data Storage & Security',
+                        'Encryption:\n'
+                        '• Data in transit: TLS 1.3 encryption\n'
+                        '• Data at rest: AES-256 encryption\n'
+                        '• Voice recordings: End-to-end encrypted\n\n'
+                        'Infrastructure:\n'
+                        '• HIPAA-compliant cloud servers\n'
+                        '• Regular security audits\n'
+                        '• Multi-factor authentication\n'
+                        '• Automatic session timeout\n\n'
+                        'Retention:\n'
+                        '• Active accounts: Data retained during subscription\n'
+                        '• Deleted accounts: Data purged within 30 days\n'
+                        '• Research data: Permanently anonymized',
+                        Icons.security_outlined,
+                        const Color(0xFF10B981),
+                      ),
+                      _buildTermsSection(
+                        '4. Data Sharing',
+                        '🚫 We Do NOT:\n'
+                        '• Sell your personal data to third parties\n'
+                        '• Share identifiable health data without consent\n'
+                        '• Use data for targeted advertising\n\n'
+                        '✅ We May Share With:\n'
+                        '• Your healthcare providers (with explicit consent)\n'
+                        '• Research institutions (anonymized data only)\n'
+                        '• Legal authorities (when required by law)\n'
+                        '• Service providers (under strict contracts)',
+                        Icons.share_outlined,
+                        const Color(0xFFF59E0B),
+                      ),
+                      _buildTermsSection(
+                        '5. Your Privacy Rights',
+                        'You have the right to:\n\n'
+                        '📥 Access: Request a copy of all your data\n'
+                        '✏️ Correct: Update or fix inaccurate information\n'
+                        '🗑️ Delete: Request permanent data deletion\n'
+                        '📤 Export: Download your health records\n'
+                        '🚫 Opt-out: Decline research participation\n'
+                        '🔒 Restrict: Limit how we use your data\n\n'
+                        'To exercise these rights, contact privacy@neuroverse.pk',
+                        Icons.privacy_tip_outlined,
+                        const Color(0xFFEC4899),
+                      ),
+                      _buildTermsSection(
+                        '6. Children\'s Privacy',
+                        'NeuroVerse is intended for users 18 years and older.\n\n'
+                        'For users aged 13-17:\n'
+                        '• Parental/guardian consent is required\n'
+                        '• Limited data collection applies\n'
+                        '• No research participation allowed\n\n'
+                        'We do not knowingly collect data from children under 13.',
+                        Icons.child_care_outlined,
+                        const Color(0xFF6B7280),
+                      ),
+                      _buildTermsSection(
+                        '7. Contact Us',
+                        'For privacy concerns or data requests:\n\n'
+                        '📧 Email: privacy@neuroverse.pk\n'
+                        '📞 Phone: +92 300 1234567\n'
+                        '🏢 Address: Islamabad, Pakistan\n\n'
+                        'We respond to all privacy requests within 30 days.',
+                        Icons.contact_support_outlined,
+                        const Color(0xFF3B82F6),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.black.withOpacity(0.1)),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Close',
+                            style: TextStyle(
+                              color: Colors.black54,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() => agreeToTerms = true);
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: darkCard,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'I Accept',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTermsSection(String title, String content, IconData icon, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 14, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              content,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withOpacity(0.6),
+                height: 1.6,
               ),
             ),
           ),

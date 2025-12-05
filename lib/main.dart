@@ -4,6 +4,7 @@ import 'package:neuroverse/features/Home/home.dart';
 import 'package:neuroverse/features/auth/login.dart';
 import 'package:neuroverse/features/auth/register.dart';
 import 'package:neuroverse/features/auth/forgot_password_screen.dart';
+import 'package:neuroverse/features/auth/otp-verification.dart';
 import 'package:neuroverse/features/profile/profile.dart';
 import 'package:neuroverse/features/profile/edit_profile.dart';
 import 'package:neuroverse/features/labs/testsscreen.dart';
@@ -47,7 +48,14 @@ class MyApp extends StatelessWidget {
       routes: {
         '/': (context) => const LoginScreen(),
         '/register': (context) => const SignUpScreen(),
-        '/forgot-password_screen': (context) => const ForgotPasswordScreen(),
+        '/forgot-password': (context) => const ForgotPasswordScreen(),
+        '/otp-verification': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+          return OTPVerificationScreen(
+            email: args?['email'] ?? '',
+            verificationType: args?['type'] ?? 'signup',
+          );
+        },
         '/home': (context) => const HomeScreen(),
         '/profile': (context) => const ProfileScreen(),
         '/edit-profile': (context) => const EditProfileScreen(),
