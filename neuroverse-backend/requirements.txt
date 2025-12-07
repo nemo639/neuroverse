@@ -1,0 +1,47 @@
+# FastAPI & Server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+gunicorn==21.2.0
+
+# Database
+sqlalchemy==2.0.25
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+pydantic[email]==2.5.3
+pydantic-settings==2.1.0
+
+# Email
+fastapi-mail==1.4.1
+aiosmtplib==3.0.1
+
+# File Storage
+python-magic==0.4.27
+aiofiles==23.2.1
+boto3==1.34.25
+
+# Utilities
+python-dateutil==2.8.2
+pytz==2024.1
+uuid6==2024.1.12
+
+# ML/AI (for future integration)
+numpy==1.26.3
+pandas==2.2.0
+scikit-learn==1.4.0
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+httpx==0.26.0
+
+# Development
+python-dotenv==1.0.0
+black==24.9.1
+isort==5.12.0
