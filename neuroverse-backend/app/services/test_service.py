@@ -1,794 +1,520 @@
-from datetime import datetime, timedelta, timezone
+"""
+Test Service - Test sessions, items, and result management
+Core business logic for test flow
+"""
+
+from datetime import datetime
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, desc
+from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
-import random
 
-from app.models.test import Test, TestResult, Report, TestCategoryEnum, TestStatusEnum, RiskLevelEnum
-from app.schemas.test import (
-    TestCreate, TestResponse, TestDetailResponse, TestListResponse,
-    TestResultCreate, TestResultResponse, TestResultListResponse,
-    ReportCreate, ReportResponse, DashboardStats, DashboardResponse, RecentTest,
-    XAIResponse, XAIModuleData
+from app.models.user import User
+from app.models.test_session import TestSession, SessionStatus
+from app.models.test_item import TestItem
+from app.models.test_result import TestResult
+from app.schemas.test_session import (
+    TestSessionCreate, TestSessionResponse, TestSessionDetailResponse,
+    TestDashboardResponse, CategoryTestInfo
 )
+from app.schemas.test_item import TestItemCreate, TestItemBatchCreate, TestItemResponse
+from app.schemas.test_result import TestResultDetailResponse
+from app.services.ml_service import MLService
+from app.services.fusion_service import FusionService
+from app.services.xai_service import XAIService
+
+
+# Category configuration
+CATEGORY_CONFIG = {
+    "cognitive": {
+        "display_name": "Cognitive & Memory",
+        "description": "Tests for memory, attention, and executive function",
+        "mini_tests": ["stroop", "nback", "word_recall"],
+        "estimated_duration": "10-15 min"
+    },
+    "speech": {
+        "display_name": "Speech & Language",
+        "description": "Tests for speech patterns and language processing",
+        "mini_tests": ["story_recall", "sustained_vowel", "picture_description"],
+        "estimated_duration": "8-12 min"
+    },
+    "motor": {
+        "display_name": "Motor Functions",
+        "description": "Tests for fine motor control and coordination",
+        "mini_tests": ["finger_tapping", "spiral_drawing"],
+        "estimated_duration": "5-8 min"
+    },
+    "gait": {
+        "display_name": "Gait & Movement",
+        "description": "Tests for walking, balance, and movement patterns",
+        "mini_tests": ["walking_test", "turn_in_place", "balance_test"],
+        "estimated_duration": "8-10 min"
+    },
+    "facial": {
+        "display_name": "Facial Analysis",
+        "description": "Tests for facial expressions and micro-movements",
+        "mini_tests": ["blink_analysis", "smile_analysis", "expression_tracking"],
+        "estimated_duration": "3-5 min"
+    }
+}
 
 
 class TestService:
-    """Service for handling test operations."""
+    """Test session and result management service."""
     
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.ml_service = MLService()
+        self.fusion_service = FusionService()
+        self.xai_service = XAIService()
     
-    # ============== Test Management ==============
+    # ============== SESSION MANAGEMENT ==============
     
-    async def create_test(self, user_id: str, test_data: TestCreate) -> Test:
+    async def create_session(self, user_id: int, data: TestSessionCreate) -> TestSession:
         """Create a new test session."""
-        test = Test(
-            user_id=user_id,
-            category=test_data.category,
-            test_name=test_data.test_name,
-            status=TestStatusEnum.PENDING,
-            device_info=test_data.device_info,
-            app_version=test_data.app_version
-        )
-        
-        self.db.add(test)
-        await self.db.flush()
-        
-        return test
-    
-    async def start_test(self, test_id: str, user_id: str) -> Test:
-        """Start a test session."""
-        test = await self._get_test(test_id, user_id)
-        
-        if test.status != TestStatusEnum.PENDING:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Test already started or completed"
-            )
-        
-        test.status = TestStatusEnum.IN_PROGRESS
-        test.started_at = datetime.now(timezone.utc)
-        
-        await self.db.flush()
-        
-        return test
-    
-    async def submit_test_item(
-        self,
-        test_id: str,
-        user_id: str,
-        item_data: TestResultCreate
-    ) -> TestResult:
-        """Submit a single test item result."""
-        test = await self._get_test(test_id, user_id)
-        
-        if test.status != TestStatusEnum.IN_PROGRESS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Test must be in progress to submit items"
-            )
-        
-        # Process the item and generate score
-        score, is_abnormal, notes = self._analyze_test_item(
-            item_data.item_name,
-            item_data.item_type,
-            item_data.raw_value,
-            item_data.processed_value,
-            test.category
-        )
-        
-        result = TestResult(
-            test_id=test_id,
-            item_name=item_data.item_name,
-            item_type=item_data.item_type,
-            raw_value=item_data.raw_value,
-            processed_value=item_data.processed_value,
-            score=score,
-            is_abnormal=is_abnormal,
-            notes=notes
-        )
-        
-        self.db.add(result)
-        await self.db.flush()
-        
-        return result
-    
-    async def submit_test_items(
-        self,
-        test_id: str,
-        user_id: str,
-        items: List[TestResultCreate]
-    ) -> List[TestResult]:
-        """Submit multiple test item results at once."""
-        results = []
-        for item_data in items:
-            result = await self.submit_test_item(test_id, user_id, item_data)
-            results.append(result)
-        return results
-    
-    async def get_test_results(
-        self,
-        test_id: str,
-        user_id: str
-    ) -> TestResultListResponse:
-        """Get all results for a test."""
-        # Verify test ownership
-        await self._get_test(test_id, user_id)
-        
-        result = await self.db.execute(
-            select(TestResult)
-            .where(TestResult.test_id == test_id)
-            .order_by(TestResult.created_at)
-        )
-        results = result.scalars().all()
-        
-        abnormal_count = sum(1 for r in results if r.is_abnormal)
-        
-        return TestResultListResponse(
-            results=[self._result_to_response(r) for r in results],
-            total=len(results),
-            abnormal_count=abnormal_count
-        )
-    
-    async def complete_test(
-        self,
-        test_id: str,
-        user_id: str,
-        raw_data: dict = None
-    ) -> Test:
-        """Complete a test and generate overall results."""
-        test = await self._get_test(test_id, user_id)
-        
-        if test.status != TestStatusEnum.IN_PROGRESS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Test not in progress"
-            )
-        
-        test.completed_at = datetime.now(timezone.utc)
-        test.status = TestStatusEnum.COMPLETED
-        
-        if test.started_at:
-            started = test.started_at
-            completed = test.completed_at
-            if started.tzinfo is None:
-                started = started.replace(tzinfo=timezone.utc)
-            test.duration_seconds = int((completed - started).total_seconds())
-        
-        if raw_data:
-            test.raw_data = raw_data
-        
-        # Get all test results and calculate overall score
-        result = await self.db.execute(
-            select(TestResult).where(TestResult.test_id == test_id)
-        )
-        test_results = result.scalars().all()
-        
-        # Calculate overall score from individual results
-        if test_results:
-            scores = [r.score for r in test_results if r.score is not None]
-            if scores:
-                test.score = round(sum(scores) / len(scores), 1)
-            else:
-                test.score = round(random.uniform(60, 95), 1)
-        else:
-            # No individual results, generate mock score
-            test.score = round(random.uniform(60, 95), 1)
-        
-        test.risk_percentage = round(100 - test.score, 1)
-        test.confidence_score = round(random.uniform(0.85, 0.98), 2)
-        
-        # Set risk level
-        if test.risk_percentage < 25:
-            test.risk_level = RiskLevelEnum.LOW
-        elif test.risk_percentage < 50:
-            test.risk_level = RiskLevelEnum.MODERATE
-        elif test.risk_percentage < 75:
-            test.risk_level = RiskLevelEnum.HIGH
-        else:
-            test.risk_level = RiskLevelEnum.CRITICAL
-        
-        # Generate AI analysis
-        await self._process_test_results(test, test_results)
-        
-        await self.db.flush()
-        
-        return test
-    
-    async def get_test(self, test_id: str, user_id: str) -> TestDetailResponse:
-        """Get test details with results."""
-        # Get test with results loaded
-        result = await self.db.execute(
-            select(Test)
-            .options(selectinload(Test.results))
-            .where(
+        # Check for existing in-progress session
+        existing = await self.db.execute(
+            select(TestSession).where(
                 and_(
-                    Test.id == test_id,
-                    Test.user_id == user_id
+                    TestSession.user_id == user_id,
+                    TestSession.status.in_(["created", "in_progress"])
                 )
             )
         )
-        test = result.scalar_one_or_none()
-        
-        if not test:
+        if existing.scalar_one_or_none():
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Test not found"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You have an incomplete test session. Please complete or cancel it first."
             )
         
-        return self._to_detail_response(test)
+        session = TestSession(
+            user_id=user_id,
+            category=data.category.value,
+            status=SessionStatus.CREATED.value,
+        )
+        
+        self.db.add(session)
+        await self.db.commit()
+        await self.db.refresh(session)
+        
+        return session
     
-    async def get_user_tests(
-        self,
-        user_id: str,
-        category: Optional[TestCategoryEnum] = None,
-        status: Optional[TestStatusEnum] = None,
-        limit: int = 50
-    ) -> TestListResponse:
-        """Get user's tests."""
-        query = select(Test).where(Test.user_id == user_id)
+    async def start_session(self, user_id: int, session_id: int) -> TestSession:
+        """Start a test session."""
+        session = await self._get_session(session_id, user_id)
+        
+        if session.status != SessionStatus.CREATED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Session already started or completed"
+            )
+        
+        session.status = SessionStatus.IN_PROGRESS.value
+        session.started_at = datetime.utcnow()
+        
+        await self.db.commit()
+        await self.db.refresh(session)
+        
+        return session
+    
+    async def complete_session(self, user_id: int, session_id: int) -> TestResultDetailResponse:
+        """
+        Complete a test session and process results.
+        This triggers ML feature extraction, fusion, and XAI generation.
+        """
+        session = await self._get_session(session_id, user_id, load_items=True)
+        
+        if session.status == SessionStatus.COMPLETED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Session already completed"
+            )
+        
+        if not session.test_items or len(session.test_items) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No test items in session. Please complete at least one test."
+            )
+        
+        # 1. Extract features from all test items
+        extracted_features = await self.ml_service.extract_features(
+            category=session.category,
+            test_items=session.test_items
+        )
+        
+        # 2. Calculate risk scores using fusion
+        risk_scores = await self.fusion_service.calculate_risk_scores(
+            category=session.category,
+            features=extracted_features
+        )
+        
+        # 3. Generate XAI explanations
+        xai_explanation = await self.xai_service.generate_explanation(
+            category=session.category,
+            features=extracted_features,
+            risk_scores=risk_scores
+        )
+        
+        # 4. Create test result
+        test_result = TestResult(
+            session_id=session.id,
+            ad_risk_score=risk_scores["ad_risk"],
+            pd_risk_score=risk_scores["pd_risk"],
+            category_score=risk_scores["category_score"],
+            stage=risk_scores.get("stage"),
+            severity=risk_scores.get("severity"),
+            extracted_features=extracted_features,
+            xai_explanation=xai_explanation,
+        )
+        
+        self.db.add(test_result)
+        
+        # 5. Update session status
+        session.status = SessionStatus.COMPLETED.value
+        session.completed_at = datetime.utcnow()
+        
+        # 6. Update user's scores
+        await self._update_user_scores(user_id, session.category, risk_scores)
+        
+        await self.db.commit()
+        await self.db.refresh(test_result)
+        
+        return TestResultDetailResponse(
+            id=test_result.id,
+            session_id=test_result.session_id,
+            ad_risk_score=test_result.ad_risk_score,
+            pd_risk_score=test_result.pd_risk_score,
+            category_score=test_result.category_score,
+            stage=test_result.stage,
+            severity=test_result.severity,
+            extracted_features=test_result.extracted_features,
+            xai_explanation=xai_explanation,
+            category=session.category,
+            items_processed=len(session.test_items),
+            created_at=test_result.created_at,
+        )
+    
+    async def cancel_session(self, user_id: int, session_id: int) -> TestSession:
+        """Cancel a test session."""
+        session = await self._get_session(session_id, user_id)
+        
+        if session.status == SessionStatus.COMPLETED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot cancel completed session"
+            )
+        
+        session.status = SessionStatus.CANCELLED.value
+        
+        await self.db.commit()
+        await self.db.refresh(session)
+        
+        return session
+    
+    async def get_session(self, user_id: int, session_id: int) -> TestSessionDetailResponse:
+        """Get session details with items and result."""
+        session = await self._get_session(session_id, user_id, load_items=True, load_result=True)
+        
+        return TestSessionDetailResponse(
+            id=session.id,
+            user_id=session.user_id,
+            category=session.category,
+            status=session.status,
+            started_at=session.started_at,
+            completed_at=session.completed_at,
+            created_at=session.created_at,
+            test_items=[TestItemResponse.model_validate(item) for item in session.test_items],
+            test_result=session.test_result,
+        )
+    
+    async def list_sessions(
+        self, 
+        user_id: int, 
+        category: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 20,
+        offset: int = 0
+    ) -> List[TestSession]:
+        """List user's test sessions."""
+        query = select(TestSession).where(TestSession.user_id == user_id)
         
         if category:
-            query = query.where(Test.category == category)
+            query = query.where(TestSession.category == category)
         if status:
-            query = query.where(Test.status == status)
+            query = query.where(TestSession.status == status)
         
-        query = query.order_by(desc(Test.created_at)).limit(limit)
+        query = query.order_by(TestSession.created_at.desc()).limit(limit).offset(offset)
         
         result = await self.db.execute(query)
-        tests = result.scalars().all()
-        
-        total = len(tests)
-        completed = sum(1 for t in tests if t.status == TestStatusEnum.COMPLETED)
-        pending = sum(1 for t in tests if t.status == TestStatusEnum.PENDING)
-        
-        return TestListResponse(
-            tests=[self._to_response(t) for t in tests],
-            total=total,
-            completed=completed,
-            pending=pending
-        )
+        return list(result.scalars().all())
     
-    async def get_recent_tests(self, user_id: str, limit: int = 5) -> List[RecentTest]:
-        """Get user's recent tests."""
-        result = await self.db.execute(
-            select(Test)
-            .where(Test.user_id == user_id)
-            .order_by(desc(Test.created_at))
-            .limit(limit)
-        )
-        tests = result.scalars().all()
+    # ============== TEST ITEMS ==============
+    
+    async def add_test_item(
+        self, 
+        user_id: int, 
+        session_id: int, 
+        data: TestItemCreate
+    ) -> TestItem:
+        """Add a test item to a session."""
+        session = await self._get_session(session_id, user_id)
         
-        return [
-            RecentTest(
-                id=t.id,
-                test_name=t.test_name,
-                category=t.category,
-                status=t.status,
-                score=t.score,
-                completed_at=t.completed_at
+        if session.status == SessionStatus.COMPLETED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot add items to completed session"
             )
-            for t in tests
-        ]
-    
-    # ============== Dashboard ==============
-    
-    async def get_dashboard(self, user_id: str) -> DashboardResponse:
-        """Get user dashboard data."""
-        result = await self.db.execute(
-            select(Test).where(
-                and_(
-                    Test.user_id == user_id,
-                    Test.status == TestStatusEnum.COMPLETED
-                )
-            ).order_by(desc(Test.completed_at))
+        
+        # Auto-start session if not started
+        if session.status == SessionStatus.CREATED.value:
+            session.status = SessionStatus.IN_PROGRESS.value
+            session.started_at = datetime.utcnow()
+        
+        item = TestItem(
+            session_id=session_id,
+            item_name=data.item_name,
+            item_type=data.item_type,
+            raw_data=data.raw_data,
+            raw_value=data.raw_value,
+            processed_value=data.processed_value,
+            started_at=data.started_at,
+            completed_at=data.completed_at or datetime.utcnow(),
         )
-        completed_tests = result.scalars().all()
         
-        # Calculate category scores
-        category_scores = {}
-        for category in TestCategoryEnum:
-            cat_tests = [t for t in completed_tests if t.category == category]
-            if cat_tests:
-                category_scores[category.value] = sum(t.score or 0 for t in cat_tests) / len(cat_tests)
+        self.db.add(item)
+        await self.db.commit()
+        await self.db.refresh(item)
         
-        # Overall risk calculation
-        if category_scores:
-            avg_score = sum(category_scores.values()) / len(category_scores)
-            overall_risk_score = 100 - avg_score
+        return item
+    
+    async def add_test_items_batch(
+        self, 
+        user_id: int, 
+        session_id: int, 
+        data: TestItemBatchCreate
+    ) -> List[TestItem]:
+        """Add multiple test items at once."""
+        session = await self._get_session(session_id, user_id)
+        
+        if session.status == SessionStatus.COMPLETED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot add items to completed session"
+            )
+        
+        if session.status == SessionStatus.CREATED.value:
+            session.status = SessionStatus.IN_PROGRESS.value
+            session.started_at = datetime.utcnow()
+        
+        items = []
+        for item_data in data.items:
+            item = TestItem(
+                session_id=session_id,
+                item_name=item_data.item_name,
+                item_type=item_data.item_type,
+                raw_data=item_data.raw_data,
+                raw_value=item_data.raw_value,
+                processed_value=item_data.processed_value,
+                started_at=item_data.started_at,
+                completed_at=item_data.completed_at or datetime.utcnow(),
+            )
+            self.db.add(item)
+            items.append(item)
+        
+        await self.db.commit()
+        
+        for item in items:
+            await self.db.refresh(item)
+        
+        return items
+    
+    # ============== DASHBOARD ==============
+    
+    async def get_dashboard(self, user_id: int) -> TestDashboardResponse:
+        """Get test dashboard data."""
+        # Get user for current scores
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        
+        # Get session counts
+        total_sessions = await self._count_sessions(user_id)
+        completed_sessions = await self._count_sessions(user_id, status="completed")
+        
+        # Get in-progress session
+        in_progress = await self._get_in_progress_session(user_id)
+        
+        # Build category info
+        categories = []
+        for cat_id, config in CATEGORY_CONFIG.items():
+            last_completed = await self._get_last_category_session(user_id, cat_id)
+            total_cat = await self._count_sessions(user_id, category=cat_id, status="completed")
             
-            if overall_risk_score < 25:
-                risk_level = RiskLevelEnum.LOW
-            elif overall_risk_score < 50:
-                risk_level = RiskLevelEnum.MODERATE
-            elif overall_risk_score < 75:
-                risk_level = RiskLevelEnum.HIGH
-            else:
-                risk_level = RiskLevelEnum.CRITICAL
-        else:
-            overall_risk_score = 0
-            risk_level = RiskLevelEnum.LOW
+            current_score = None
+            if user:
+                score_field = f"{cat_id}_score"
+                current_score = getattr(user, score_field, None)
+            
+            categories.append(CategoryTestInfo(
+                category=cat_id,
+                display_name=config["display_name"],
+                description=config["description"],
+                mini_tests=config["mini_tests"],
+                estimated_duration=config["estimated_duration"],
+                last_completed=last_completed,
+                total_completed=total_cat,
+                current_score=current_score,
+            ))
         
-        # Pending tests count
-        pending_result = await self.db.execute(
-            select(func.count(Test.id)).where(
-                and_(
-                    Test.user_id == user_id,
-                    Test.status == TestStatusEnum.PENDING
-                )
-            )
-        )
-        pending_count = pending_result.scalar() or 0
+        # Determine recommendation
+        recommended = self._get_recommended_category(categories)
         
-        stats = DashboardStats(
-            overall_risk_score=round(overall_risk_score, 1),
-            overall_risk_level=risk_level,
-            tests_completed=len(completed_tests),
-            tests_pending=pending_count,
-            last_test_date=completed_tests[0].completed_at if completed_tests else None,
-            speech_score=category_scores.get("speech_language"),
-            cognitive_score=category_scores.get("cognitive_memory"),
-            motor_score=category_scores.get("motor_functions"),
-            gait_score=category_scores.get("gait_movement"),
-            risk_trend="stable",
-            trend_percentage=0
-        )
-        
-        recent_tests = await self.get_recent_tests(user_id, 5)
-        
-        return DashboardResponse(
-            stats=stats,
-            recent_tests=recent_tests,
-            upcoming_tests=[],
-            wellness_insight="Complete all tests regularly for accurate risk assessment."
-        )
-    
-    # ============== XAI ==============
-    
-    async def get_xai_data(self, user_id: str, category: TestCategoryEnum) -> XAIModuleData:
-        """Get XAI (Explainable AI) data for a category."""
-        result = await self.db.execute(
-            select(Test)
-            .options(selectinload(Test.results))
-            .where(
-                and_(
-                    Test.user_id == user_id,
-                    Test.category == category,
-                    Test.status == TestStatusEnum.COMPLETED
-                )
-            ).order_by(desc(Test.completed_at)).limit(1)
-        )
-        test = result.scalar_one_or_none()
-        
-        return self._get_mock_xai_data(category, test)
-    
-    # ============== Reports ==============
-    
-    async def create_report(
-        self,
-        user_id: str,
-        report_data: ReportCreate
-    ) -> Report:
-        """Create a comprehensive report."""
-        result = await self.db.execute(
-            select(Test).where(
-                and_(
-                    Test.user_id == user_id,
-                    Test.status == TestStatusEnum.COMPLETED
-                )
-            )
-        )
-        tests = result.scalars().all()
-        
-        # Calculate scores
-        category_scores = {}
-        for category in TestCategoryEnum:
-            cat_tests = [t for t in tests if t.category == category]
-            if cat_tests:
-                category_scores[category.value] = sum(t.score or 0 for t in cat_tests) / len(cat_tests)
-        
-        # Calculate overall risk
-        if category_scores:
-            avg_score = sum(category_scores.values()) / len(category_scores)
-            risk_score = 100 - avg_score
-        else:
-            risk_score = 0
-        
-        if risk_score < 25:
-            risk_level = RiskLevelEnum.LOW
-        elif risk_score < 50:
-            risk_level = RiskLevelEnum.MODERATE
-        elif risk_score < 75:
-            risk_level = RiskLevelEnum.HIGH
-        else:
-            risk_level = RiskLevelEnum.CRITICAL
-        
-        report = Report(
+        return TestDashboardResponse(
             user_id=user_id,
-            report_type=report_data.report_type,
-            title=f"{report_data.report_type.title()} Health Report",
-            overall_risk_level=risk_level,
-            overall_risk_score=risk_score,
-            speech_score=category_scores.get("speech_language"),
-            cognitive_score=category_scores.get("cognitive_memory"),
-            motor_score=category_scores.get("motor_functions"),
-            gait_score=category_scores.get("gait_movement"),
-            facial_score=category_scores.get("facial_analysis"),
-            summary="Comprehensive neurological health assessment based on multi-modal biomarker analysis.",
-            recommendations=self._generate_recommendations(risk_level, category_scores),
-            ai_interpretation=self._generate_ai_interpretation(risk_level, category_scores),
-            key_findings=self._generate_key_findings(category_scores),
-            period_start=report_data.period_start,
-            period_end=report_data.period_end
+            total_sessions=total_sessions,
+            completed_sessions=completed_sessions,
+            categories=categories,
+           in_progress_session=TestSessionResponse(
+    id=in_progress.id,
+    user_id=in_progress.user_id,
+    category=in_progress.category,
+    status=in_progress.status,
+    started_at=in_progress.started_at,
+    completed_at=in_progress.completed_at,
+    created_at=in_progress.created_at,
+    items_count=0
+) if in_progress else None,
+            recommended_category=recommended,
+            recommendation_reason="Based on your test history" if recommended else None,
         )
-        
-        self.db.add(report)
-        await self.db.flush()
-        
-        return report
     
-    async def get_user_reports(
-        self,
-        user_id: str,
-        limit: int = 20
-    ) -> List[ReportResponse]:
-        """Get user's reports."""
-        result = await self.db.execute(
-            select(Report)
-            .where(Report.user_id == user_id)
-            .order_by(desc(Report.created_at))
-            .limit(limit)
-        )
-        reports = result.scalars().all()
-        
-        return [self._report_to_response(r) for r in reports]
+    # ============== PRIVATE HELPERS ==============
     
-    # ============== Private Methods ==============
-    
-    async def _get_test(self, test_id: str, user_id: str) -> Test:
-        """Get test by ID and verify ownership."""
-        result = await self.db.execute(
-            select(Test).where(
-                and_(
-                    Test.id == test_id,
-                    Test.user_id == user_id
-                )
+    async def _get_session(
+        self, 
+        session_id: int, 
+        user_id: int,
+        load_items: bool = False,
+        load_result: bool = False
+    ) -> TestSession:
+        """Get session by ID, verify ownership."""
+        query = select(TestSession).where(
+            and_(
+                TestSession.id == session_id,
+                TestSession.user_id == user_id
             )
         )
-        test = result.scalar_one_or_none()
         
-        if not test:
+        if load_items:
+            query = query.options(selectinload(TestSession.test_items))
+        if load_result:
+            query = query.options(selectinload(TestSession.test_result))
+        
+        result = await self.db.execute(query)
+        session = result.scalar_one_or_none()
+        
+        if not session:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Test not found"
+                detail="Test session not found"
             )
         
-        return test
+        return session
     
-    def _analyze_test_item(
-        self,
-        item_name: str,
-        item_type: str,
-        raw_value: Optional[str],
-        processed_value: Optional[float],
-        category: TestCategoryEnum
-    ) -> tuple:
-        """Analyze a single test item and return (score, is_abnormal, notes)."""
+    async def _update_user_scores(self, user_id: int, category: str, risk_scores: dict):
+        """Update user's overall scores after test completion."""
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
         
-        # If processed_value is provided, use it for scoring
-        if processed_value is not None:
-            # Normalize to 0-100 score (assuming processed_value is 0-1)
-            if processed_value <= 1:
-                score = round(processed_value * 100, 1)
-            else:
-                score = min(round(processed_value, 1), 100)
-        else:
-            # Generate mock score based on category and item type
-            base_score = random.uniform(60, 95)
-            score = round(base_score, 1)
+        if not user:
+            return
         
-        # Determine if abnormal (below threshold)
-        is_abnormal = score < 60
+        # Update category score
+        score_field = f"{category}_score"
+        setattr(user, score_field, risk_scores["category_score"])
         
-        # Generate notes based on score
-        if score >= 90:
-            notes = f"Excellent performance on {item_name}"
-        elif score >= 70:
-            notes = f"Good performance on {item_name}"
-        elif score >= 60:
-            notes = f"Acceptable performance on {item_name}, room for improvement"
-        else:
-            notes = f"Below threshold on {item_name}, may indicate concern"
-        
-        return score, is_abnormal, notes
-    
-    async def _process_test_results(self, test: Test, results: List[TestResult]) -> None:
-        """Process test results and generate AI analysis."""
-        
-        # Count abnormal results
-        abnormal_count = sum(1 for r in results if r.is_abnormal)
-        total_count = len(results) if results else 0
-        
-        # Mock AI prediction
-        test.ai_prediction = {
-            "predicted_class": test.risk_level.value if test.risk_level else "low",
-            "probabilities": {
-                "low": round(random.uniform(0.1, 0.3), 2),
-                "moderate": round(random.uniform(0.2, 0.4), 2),
-                "high": round(random.uniform(0.1, 0.3), 2),
-            },
-            "total_items": total_count,
-            "abnormal_items": abnormal_count
-        }
-        
-        # Mock biomarkers
-        test.biomarkers = self._get_mock_biomarkers(test.category)
-        
-        # Mock SHAP values
-        test.shap_values = self._get_mock_shap_values(test.category)
-        
-        # Mock feature importance
-        test.feature_importance = self._get_mock_feature_importance(test.category)
-    
-    def _get_mock_biomarkers(self, category: TestCategoryEnum) -> dict:
-        """Get mock biomarkers for a category."""
-        biomarkers = {
-            TestCategoryEnum.SPEECH_LANGUAGE: {
-                "pause_frequency": round(random.uniform(2, 8), 1),
-                "avg_pause_duration": round(random.uniform(0.5, 2.5), 2),
-                "speech_rate": round(random.uniform(100, 160), 0),
-                "pitch_variance": round(random.uniform(10, 50), 1),
-                "voice_tremor": round(random.uniform(0, 5), 2)
-            },
-            TestCategoryEnum.COGNITIVE_MEMORY: {
-                "response_time": round(random.uniform(0.5, 2.0), 2),
-                "recall_accuracy": round(random.uniform(60, 95), 1),
-                "attention_score": round(random.uniform(70, 100), 1),
-                "working_memory": round(random.uniform(5, 10), 0),
-                "stroop_interference": round(random.uniform(50, 150), 0)
-            },
-            TestCategoryEnum.MOTOR_FUNCTIONS: {
-                "tremor_amplitude": round(random.uniform(0.5, 5), 2),
-                "drawing_accuracy": round(random.uniform(70, 98), 1),
-                "tap_regularity": round(random.uniform(80, 99), 1),
-                "pressure_variance": round(random.uniform(5, 30), 1),
-                "movement_speed": round(random.uniform(60, 100), 1)
-            },
-            TestCategoryEnum.GAIT_MOVEMENT: {
-                "stride_length": round(random.uniform(50, 80), 1),
-                "gait_speed": round(random.uniform(0.8, 1.4), 2),
-                "step_regularity": round(random.uniform(85, 99), 1),
-                "balance_score": round(random.uniform(70, 100), 1),
-                "turn_speed": round(random.uniform(0.5, 1.5), 2)
-            },
-            TestCategoryEnum.FACIAL_ANALYSIS: {
-                "blink_rate": round(random.uniform(8, 20), 0),
-                "smile_velocity": round(random.uniform(0.3, 1.0), 2),
-                "expression_range": round(random.uniform(60, 100), 1),
-                "asymmetry_score": round(random.uniform(0, 15), 1),
-                "micro_expressions": round(random.uniform(3, 10), 0)
-            }
-        }
-        return biomarkers.get(category, {})
-    
-    def _get_mock_shap_values(self, category: TestCategoryEnum) -> list:
-        """Get mock SHAP values for a category."""
-        features = {
-            TestCategoryEnum.SPEECH_LANGUAGE: [
-                ("Speech Pauses", 0.24), ("Pause Duration", 0.18), ("Voice Tremor", 0.15),
-                ("Articulation Rate", 0.12), ("Pitch Variance", 0.08)
-            ],
-            TestCategoryEnum.COGNITIVE_MEMORY: [
-                ("Response Time", 0.26), ("Recall Accuracy", 0.19), ("Stroop Interference", 0.17),
-                ("Working Memory", 0.11), ("Attention Span", 0.07)
-            ],
-            TestCategoryEnum.MOTOR_FUNCTIONS: [
-                ("Tremor Amplitude", 0.28), ("Drawing Speed", 0.20), ("Line Smoothness", 0.16),
-                ("Pressure Variance", 0.10), ("Spiral Accuracy", 0.09)
-            ],
-            TestCategoryEnum.GAIT_MOVEMENT: [
-                ("Gait Speed", 0.25), ("Stride Length", 0.20), ("Step Regularity", 0.18),
-                ("Balance Score", 0.12), ("Turn Speed", 0.08)
-            ],
-            TestCategoryEnum.FACIAL_ANALYSIS: [
-                ("Blink Rate", 0.22), ("Smile Velocity", 0.19), ("Expression Range", 0.14),
-                ("Eye Movement", 0.11), ("Micro Expressions", 0.08)
-            ]
-        }
-        
-        return [
-            {"feature": f[0], "value": f[1], "impact": "high" if f[1] > 0.2 else "medium" if f[1] > 0.1 else "low"}
-            for f in features.get(category, [])
-        ]
-    
-    def _get_mock_feature_importance(self, category: TestCategoryEnum) -> list:
-        """Get mock feature importance for a category."""
-        shap_values = self._get_mock_shap_values(category)
-        return [
-            {"feature": sv["feature"], "importance": sv["value"], "rank": i + 1}
-            for i, sv in enumerate(shap_values)
-        ]
-    
-    def _get_mock_xai_data(self, category: TestCategoryEnum, test: Optional[Test]) -> XAIModuleData:
-        """Get mock XAI data for a category."""
-        module_names = {
-            TestCategoryEnum.SPEECH_LANGUAGE: "speech",
-            TestCategoryEnum.COGNITIVE_MEMORY: "cognitive",
-            TestCategoryEnum.MOTOR_FUNCTIONS: "motor",
-            TestCategoryEnum.GAIT_MOVEMENT: "gait",
-            TestCategoryEnum.FACIAL_ANALYSIS: "facial"
-        }
-        
-        gradient_colors = {
-            TestCategoryEnum.SPEECH_LANGUAGE: ["#3B82F6", "#1D4ED8"],
-            TestCategoryEnum.COGNITIVE_MEMORY: ["#8B5CF6", "#6D28D9"],
-            TestCategoryEnum.MOTOR_FUNCTIONS: ["#F97316", "#EA580C"],
-            TestCategoryEnum.GAIT_MOVEMENT: ["#10B981", "#059669"],
-            TestCategoryEnum.FACIAL_ANALYSIS: ["#EC4899", "#DB2777"]
-        }
-        
-        interpretations = {
-            TestCategoryEnum.SPEECH_LANGUAGE: [
-                "Speech pauses detected at higher frequency than baseline",
-                "Voice tremor patterns indicate potential early markers",
-                "Articulation rate within normal range"
-            ],
-            TestCategoryEnum.COGNITIVE_MEMORY: [
-                "Response times show slight delay compared to age group",
-                "Word recall accuracy below optimal threshold",
-                "Working memory performance is stable"
-            ],
-            TestCategoryEnum.MOTOR_FUNCTIONS: [
-                "Tremor amplitude elevated during fine motor tasks",
-                "Drawing speed slower than baseline measurements",
-                "Pressure consistency shows minor variations"
-            ],
-            TestCategoryEnum.GAIT_MOVEMENT: [
-                "Gait speed within acceptable parameters",
-                "Step regularity shows consistent patterns",
-                "Balance metrics indicate good stability"
-            ],
-            TestCategoryEnum.FACIAL_ANALYSIS: [
-                "Blink rate lower than typical range",
-                "Smile formation velocity reduced",
-                "Expression range within normal limits"
-            ]
-        }
-        
-        shap_values = test.shap_values if test and test.shap_values else self._get_mock_shap_values(category)
-        feature_importance = test.feature_importance if test and test.feature_importance else self._get_mock_feature_importance(category)
-        
-        return XAIModuleData(
-            module=module_names.get(category, "unknown"),
-            shap_values=shap_values,
-            feature_importance=feature_importance,
-            visualization_data={"type": "chart", "data": []},
-            interpretation=interpretations.get(category, []),
-            gradient_colors=gradient_colors.get(category, ["#6B7280", "#4B5563"])
-        )
-    
-    def _result_to_response(self, result: TestResult) -> TestResultResponse:
-        """Convert TestResult model to response schema."""
-        return TestResultResponse(
-            id=result.id,
-            test_id=result.test_id,
-            item_name=result.item_name,
-            item_type=result.item_type,
-            raw_value=result.raw_value,
-            processed_value=result.processed_value,
-            score=result.score,
-            is_abnormal=result.is_abnormal,
-            notes=result.notes,
-            created_at=result.created_at
-        )
-    
-    def _to_response(self, test: Test) -> TestResponse:
-        """Convert Test model to response schema."""
-        return TestResponse(
-            id=test.id,
-            category=test.category,
-            test_name=test.test_name,
-            status=test.status,
-            score=test.score,
-            risk_level=test.risk_level,
-            risk_percentage=test.risk_percentage,
-            confidence_score=test.confidence_score,
-            started_at=test.started_at,
-            completed_at=test.completed_at,
-            duration_seconds=test.duration_seconds,
-            created_at=test.created_at
-        )
-    
-    def _to_detail_response(self, test: Test) -> TestDetailResponse:
-        """Convert Test model to detailed response schema."""
-        results = None
-        if hasattr(test, 'results') and test.results:
-            results = [self._result_to_response(r) for r in test.results]
-        
-        return TestDetailResponse(
-            id=test.id,
-            category=test.category,
-            test_name=test.test_name,
-            status=test.status,
-            score=test.score,
-            risk_level=test.risk_level,
-            risk_percentage=test.risk_percentage,
-            confidence_score=test.confidence_score,
-            started_at=test.started_at,
-            completed_at=test.completed_at,
-            duration_seconds=test.duration_seconds,
-            created_at=test.created_at,
-            ai_prediction=test.ai_prediction,
-            biomarkers=test.biomarkers,
-            shap_values=test.shap_values,
-            feature_importance=test.feature_importance,
-            results=results
-        )
-    
-    def _report_to_response(self, report: Report) -> ReportResponse:
-        """Convert Report model to response schema."""
-        return ReportResponse(
-            id=report.id,
-            report_type=report.report_type,
-            title=report.title,
-            overall_risk_level=report.overall_risk_level,
-            overall_risk_score=report.overall_risk_score,
-            speech_score=report.speech_score,
-            cognitive_score=report.cognitive_score,
-            motor_score=report.motor_score,
-            gait_score=report.gait_score,
-            facial_score=report.facial_score,
-            summary=report.summary,
-            recommendations=report.recommendations,
-            ai_interpretation=report.ai_interpretation,
-            key_findings=report.key_findings,
-            period_start=report.period_start,
-            period_end=report.period_end,
-            pdf_path=report.pdf_path,
-            created_at=report.created_at
-        )
-    
-    def _generate_recommendations(self, risk_level: RiskLevelEnum, scores: dict) -> list:
-        """Generate recommendations based on risk level."""
-        recommendations = [
-            "Continue regular neurological assessments",
-            "Maintain physical activity and mental exercises",
-            "Ensure adequate sleep and nutrition"
+        # Recalculate overall AD/PD risk (simple average for now)
+        # TODO: Use proper fusion weights
+        scores = [
+            user.cognitive_score or 0,
+            user.speech_score or 0,
+            user.motor_score or 0,
+            user.gait_score or 0,
+            user.facial_score or 0,
         ]
         
-        if risk_level in [RiskLevelEnum.MODERATE, RiskLevelEnum.HIGH]:
-            recommendations.append("Consider consulting a neurologist for detailed evaluation")
+        # Only average non-zero scores
+        active_scores = [s for s in scores if s > 0]
+        if active_scores:
+            # For now, use category contributions
+            user.ad_risk_score = risk_scores["ad_risk"]
+            user.pd_risk_score = risk_scores["pd_risk"]
+            user.ad_stage = risk_scores.get("ad_stage")
+            user.pd_stage = risk_scores.get("pd_stage")
         
-        if risk_level == RiskLevelEnum.CRITICAL:
-            recommendations.insert(0, "Urgent: Schedule appointment with healthcare provider")
-        
-        return recommendations
+        user.updated_at = datetime.utcnow()
     
-    def _generate_ai_interpretation(self, risk_level: RiskLevelEnum, scores: dict) -> str:
-        """Generate AI interpretation text."""
-        level_text = {
-            RiskLevelEnum.LOW: "indicates minimal indicators of neurological concerns",
-            RiskLevelEnum.MODERATE: "shows some markers that warrant continued monitoring",
-            RiskLevelEnum.HIGH: "reveals patterns that suggest consulting a healthcare professional",
-            RiskLevelEnum.CRITICAL: "indicates urgent need for professional medical evaluation"
-        }
+    async def _count_sessions(
+        self, 
+        user_id: int, 
+        category: Optional[str] = None,
+        status: Optional[str] = None
+    ) -> int:
+        """Count sessions with filters."""
+        from sqlalchemy import func
         
-        return f"Based on multi-modal biomarker analysis, your assessment {level_text.get(risk_level, '')}. This is a screening tool and not a diagnosis."
+        query = select(func.count(TestSession.id)).where(TestSession.user_id == user_id)
+        
+        if category:
+            query = query.where(TestSession.category == category)
+        if status:
+            query = query.where(TestSession.status == status)
+        
+        result = await self.db.execute(query)
+        return result.scalar() or 0
     
-    def _generate_key_findings(self, scores: dict) -> list:
-        """Generate key findings list."""
-        findings = []
+    async def _get_in_progress_session(self, user_id: int) -> Optional[TestSession]:
+        """Get current in-progress session."""
+        result = await self.db.execute(
+            select(TestSession).where(
+                and_(
+                    TestSession.user_id == user_id,
+                    TestSession.status.in_(["created", "in_progress"])
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+    
+    async def _get_last_category_session(self, user_id: int, category: str) -> Optional[datetime]:
+        """Get last completed session date for category."""
+        result = await self.db.execute(
+            select(TestSession.completed_at)
+            .where(
+                and_(
+                    TestSession.user_id == user_id,
+                    TestSession.category == category,
+                    TestSession.status == "completed"
+                )
+            )
+            .order_by(TestSession.completed_at.desc())
+            .limit(1)
+        )
+        row = result.first()
+        return row[0] if row else None
+    
+    def _get_recommended_category(self, categories: List[CategoryTestInfo]) -> Optional[str]:
+        """Determine recommended test category."""
+        # Prioritize untested categories
+        for cat in categories:
+            if cat.total_completed == 0:
+                return cat.category
         
-        for category, score in scores.items():
-            if score and score < 70:
-                findings.append(f"{category.replace('_', ' ').title()}: Below optimal threshold")
-            elif score and score >= 90:
-                findings.append(f"{category.replace('_', ' ').title()}: Excellent performance")
+        # Then oldest tested
+        oldest = None
+        oldest_date = None
+        for cat in categories:
+            if oldest_date is None or (cat.last_completed and cat.last_completed < oldest_date):
+                oldest_date = cat.last_completed
+                oldest = cat.category
         
-        if not findings:
-            findings.append("All assessments within normal ranges")
-        
-        return findings
+        return oldest

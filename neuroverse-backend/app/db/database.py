@@ -1,3 +1,8 @@
+"""
+NeuroVerse Database Configuration
+Async SQLAlchemy with PostgreSQL (Supabase)
+"""
+
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.pool import NullPool
@@ -5,12 +10,12 @@ from typing import AsyncGenerator
 
 from app.core.config import settings
 
-# Create async engine with Supabase fix
+# Create async engine with Supabase optimizations
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
-    poolclass=NullPool,  # Disable SQLAlchemy pooling (Supabase has its own)
+    poolclass=NullPool,
     connect_args={
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
@@ -45,14 +50,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db():
     """Initialize database - create all tables."""
-    from app.models import User, Test, Report, WellnessData, WellnessGoal
-    
+    from app.models import User, TestSession, TestItem, TestResult, WellnessEntry, Report
+
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        print("✅ Database initialized")
+        print("✅ Database initialized successfully")
     except Exception as e:
-        print(f"⚠️ Database init skipped (tables may already exist): {e}")
+        print(f"⚠️ Database init warning: {e}")
 
 
 async def close_db():

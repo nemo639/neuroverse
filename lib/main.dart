@@ -14,7 +14,15 @@ import 'package:neuroverse/features/labs/motor_functions_test.dart';
 import 'package:neuroverse/features/labs/gait_movement_test.dart';
 import 'package:neuroverse/features/report/reports_screen.dart';
 import 'package:neuroverse/features/xai/xai.dart';
-
+import 'package:neuroverse/features/labs/tests/story-recall-test.dart';
+import 'package:neuroverse/features/labs/tests/sustained_vowel_test.dart';
+import 'package:neuroverse/features/labs/tests/picture_description_test.dart';
+import 'package:neuroverse/features/labs/tests/stroop_test.dart';
+import 'package:neuroverse/features/labs/tests/nback_test.dart';
+import 'package:neuroverse/features/labs/tests/word_recall_test.dart';
+import 'package:neuroverse/features/labs/tests/finger_tapping_test.dart';
+import 'package:neuroverse/features/labs/tests/spiral_drawing_test.dart';
+import 'package:neuroverse/features/labs/tests/gait_assessment_test.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -64,6 +72,16 @@ class MyApp extends StatelessWidget {
         '/test/cognitive-memory': (context) => const CognitiveMemoryTestScreen(),
         '/test/motor-functions': (context) => const MotorFunctionsTestScreen(),
         '/test/gait-movement': (context) => const GaitMovementTestScreen(),
+        '/test/story-recall-test': (context) => const StoryRecallTestScreen(),
+        '/test/sustained-vowel-test': (context) => const SustainedVowelTestScreen(),
+        '/test/picture-description-test': (context) => const PictureDescriptionTestScreen(),
+        // Routes
+        '/test/stroop-test': (context) => const StroopTestScreen(),
+        '/test/nback-test': (context) => const NBackTestScreen(),
+        '/test/word-recall-test': (context) => const WordRecallTestScreen(),
+        '/test/finger-tapping-test': (context) => const FingerTappingTestScreen(),
+        '/test/spiral-drawing-test': (context) => const SpiralDrawingTestScreen(),
+        '/test/gait_assessment_test': (context) => const GaitAssessmentTestScreen(),
         '/reports': (context) => const ReportsScreen(),
         '/XAI': (context) => const XAIScreen(),
       },

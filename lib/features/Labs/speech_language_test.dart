@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class SpeechLanguageTestScreen extends StatefulWidget {
   const SpeechLanguageTestScreen({super.key});
@@ -9,9 +10,14 @@ class SpeechLanguageTestScreen extends StatefulWidget {
   State<SpeechLanguageTestScreen> createState() => _SpeechLanguageTestScreenState();
 }
 
+
+
 class _SpeechLanguageTestScreenState extends State<SpeechLanguageTestScreen> with SingleTickerProviderStateMixin {
   late AnimationController _pageController;
-
+// Add these:
+  int? _sessionId;
+  bool _isSubmitting = false;
+  Map<String, Map<String, dynamic>> _testResults = {};
   // Design colors matching home screen
   static const Color bgColor = Color(0xFFF7F7F7);
   static const Color mintGreen = Color(0xFFB8E8D1);
@@ -28,7 +34,7 @@ class _SpeechLanguageTestScreenState extends State<SpeechLanguageTestScreen> wit
       name: 'Story Recall',
       description: 'Listen and repeat a short story',
       duration: '5 min',
-      isCompleted: true,
+      isCompleted: false,
       icon: Icons.auto_stories_rounded,
     ),
     TestComponent(
@@ -64,6 +70,17 @@ class _SpeechLanguageTestScreenState extends State<SpeechLanguageTestScreen> wit
         statusBarIconBrightness: Brightness.dark,
       ),
     );
+
+    // Get sessionId from arguments
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null) {
+      setState(() {
+        _sessionId = args['sessionId'];
+      });
+      _startSession();
+    }
+  });
   }
 
   @override
@@ -72,9 +89,93 @@ class _SpeechLanguageTestScreenState extends State<SpeechLanguageTestScreen> wit
     super.dispose();
   }
 
+  Future<void> _startSession() async {
+  if (_sessionId != null) {
+    await ApiService.startTestSession(sessionId: _sessionId!);
+  }
+}
+
+  Future<void> _submitTestItem(String testName, Map<String, dynamic> rawData) async {
+  if (_sessionId == null) return;
+
+  final result = await ApiService.addTestItem(
+    sessionId: _sessionId!,
+    itemName: testName.toLowerCase().replaceAll(' ', '_'),
+    itemType: 'speech',
+    rawData: rawData,
+  );
+
+  if (result['success']) {
+    _testResults[testName] = rawData;
+  }
+}
+
+Future<void> _completeSession() async {
+  if (_sessionId == null) return;
+
+  setState(() => _isSubmitting = true);
+
+  final result = await ApiService.completeTestSession(sessionId: _sessionId!);
+
+  setState(() => _isSubmitting = false);
+
+  if (mounted) {
+    if (result['success']) {
+      Navigator.pushReplacementNamed(
+        context,
+        '/XAI',
+        arguments: {'result': result['data']},
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['error'] ?? 'Failed to complete session'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
+
+void _showCompleteDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('All Tests Completed! 🎉', style: TextStyle(fontWeight: FontWeight.w700)),
+      content: const Text('Ready to analyze your speech patterns with AI?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Review Tests', style: TextStyle(color: Colors.black.withOpacity(0.5))),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _completeSession();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: blueAccent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: _isSubmitting
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : const Text('Get Results', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+      return WillPopScope(
+    onWillPop: () async {
+      if (_sessionId != null && completedCount == 0) {
+        await ApiService.cancelTestSession(sessionId: _sessionId!);
+      }
+      return true;
+    },
+    child:  Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
         child: SingleChildScrollView(
@@ -97,7 +198,8 @@ class _SpeechLanguageTestScreenState extends State<SpeechLanguageTestScreen> wit
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildHeader() {
@@ -589,10 +691,42 @@ class _SpeechLanguageTestScreenState extends State<SpeechLanguageTestScreen> wit
               )
             else
               GestureDetector(
-                onTap: () {
+                onTap: () async{
                   HapticFeedback.mediumImpact();
-                  // Navigate to specific test
-                },
+                  String routeName = '';
+    if (test.name == 'Story Recall') {
+      routeName = '/test/story-recall';
+    } else if (test.name == 'Sustained Vowel') {
+      routeName = '/test/sustained-vowel';
+    } else if (test.name == 'Picture Description') {
+      routeName = '/test/picture-description';
+    }
+
+    if (routeName.isNotEmpty) {
+      final result = await Navigator.pushNamed(context, routeName);
+      
+      if (result != null && result is Map<String, dynamic>) {
+        await _submitTestItem(test.name, result);
+
+        setState(() {
+          final index = testComponents.indexWhere((t) => t.name == test.name);
+          if (index != -1) {
+            testComponents[index] = TestComponent(
+              name: test.name,
+              description: test.description,
+              duration: test.duration,
+              isCompleted: true,
+              icon: test.icon,
+            );
+          }
+        });
+
+        if (completedCount == totalCount) {
+          _showCompleteDialog();
+        }
+      }
+    }
+  },
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -658,7 +792,7 @@ class TestComponent {
   final String name;
   final String description;
   final String duration;
-  final bool isCompleted;
+  bool isCompleted;
   final IconData icon;
 
   TestComponent({

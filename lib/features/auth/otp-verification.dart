@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String email;
@@ -184,135 +185,141 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> with Tick
   }
 
   Future<void> _handleVerify() async {
-    if (!_isOtpComplete) {
-      setState(() {
-        _hasError = true;
-        _errorMessage = "Please enter the complete 6-digit code";
-      });
-      _shakeController.forward().then((_) => _shakeController.reset());
-      HapticFeedback.heavyImpact();
-      return;
-    }
-
-    HapticFeedback.mediumImpact();
-    setState(() => _isLoading = true);
-
-    // Simulate API verification
-    await Future.delayed(const Duration(milliseconds: 2000));
-
-    // Simulate success/failure (in real app, check API response)
-    final isValid = _otpCode == "123456"; // Demo: 123456 is valid
-
-    if (isValid) {
-      setState(() {
-        _isLoading = false;
-        _isVerified = true;
-      });
-      
-      HapticFeedback.heavyImpact();
-      
-      // Navigate after success animation
-      await Future.delayed(const Duration(milliseconds: 1500));
-      
-      if (mounted) {
-        if (widget.verificationType == 'signup') {
-          Navigator.pushReplacementNamed(context, '/home');
-        } else if (widget.verificationType == 'forgot_password') {
-          // Navigate to reset password screen
-          Navigator.pushReplacementNamed(context, '/reset-password');
-        } else {
-          Navigator.pushReplacementNamed(context, '/home');
-        }
-      }
-    } else {
-      setState(() {
-        _isLoading = false;
-        _hasError = true;
-        _errorMessage = "Invalid verification code. Please try again.";
-      });
-      _shakeController.forward().then((_) => _shakeController.reset());
-      HapticFeedback.heavyImpact();
-      
-      // Clear OTP fields
-      for (var controller in _controllers) {
-        controller.clear();
-      }
-      _focusNodes[0].requestFocus();
-    }
+  if (!_isOtpComplete) {
+    setState(() {
+      _hasError = true;
+      _errorMessage = "Please enter the complete 6-digit code";
+    });
+    _shakeController.forward().then((_) => _shakeController.reset());
+    HapticFeedback.heavyImpact();
+    return;
   }
 
-  Future<void> _handleResend() async {
-    if (!_canResend) return;
+  HapticFeedback.mediumImpact();
+  setState(() => _isLoading = true);
+
+  // Call API
+  final result = await ApiService.verifyOtp(
+    email: widget.email,
+    otp: _otpCode,
+  );
+
+  if (result['success']) {
+    setState(() {
+      _isLoading = false;
+      _isVerified = true;
+    });
     
-    HapticFeedback.lightImpact();
+    HapticFeedback.heavyImpact();
     
-    // Clear previous OTP
+    // Navigate after success animation
+    await Future.delayed(const Duration(milliseconds: 1500));
+    
+    if (mounted) {
+      if (widget.verificationType == 'signup') {
+        Navigator.pushReplacementNamed(context, '/home');
+      } else if (widget.verificationType == 'forgot_password') {
+        Navigator.pushReplacementNamed(
+          context, 
+          '/reset-password',
+          arguments: {'email': widget.email, 'otp': _otpCode},
+        );
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    }
+  } else {
+    setState(() {
+      _isLoading = false;
+      _hasError = true;
+      _errorMessage = result['error'] ?? "Invalid verification code. Please try again.";
+    });
+    _shakeController.forward().then((_) => _shakeController.reset());
+    HapticFeedback.heavyImpact();
+    
+    // Clear OTP fields
     for (var controller in _controllers) {
       controller.clear();
     }
-    setState(() {
-      _hasError = false;
-      _errorMessage = null;
-    });
-    
-    // Show loading briefly
+    _focusNodes[0].requestFocus();
+  }
+}
+
+  Future<void> _handleResend() async {
+  if (!_canResend) return;
+  
+  HapticFeedback.lightImpact();
+  
+  // Clear previous OTP
+  for (var controller in _controllers) {
+    controller.clear();
+  }
+  setState(() {
+    _hasError = false;
+    _errorMessage = null;
+  });
+  
+  // Show loading
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Row(
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            'Sending new code...',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+      backgroundColor: darkCard,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(16),
+      duration: const Duration(seconds: 2),
+    ),
+  );
+  
+  // Call API
+  final result = await ApiService.resendOtp(email: widget.email);
+  
+  _startTimer();
+  _focusNodes[0].requestFocus();
+  
+  if (mounted) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
+            Icon(
+              result['success'] ? Icons.check_circle_rounded : Icons.error_rounded, 
+              color: Colors.white, 
+              size: 20
             ),
             const SizedBox(width: 12),
-            const Text(
-              'Sending new code...',
+            Text(
+              result['success'] ? 'New code sent successfully!' : (result['error'] ?? 'Failed to send code'),
               style: TextStyle(fontWeight: FontWeight.w600),
             ),
           ],
         ),
-        backgroundColor: darkCard,
+        backgroundColor: result['success'] ? greenAccent : redAccent,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 2),
       ),
     );
-    
-    // Simulate API call
-    await Future.delayed(const Duration(milliseconds: 1500));
-    
-    _startTimer();
-    _focusNodes[0].requestFocus();
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-              const SizedBox(width: 12),
-              const Text(
-                'New code sent successfully!',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          backgroundColor: greenAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
   }
-
+}
   String _maskEmail(String email) {
     final parts = email.split('@');
     if (parts.length != 2) return email;

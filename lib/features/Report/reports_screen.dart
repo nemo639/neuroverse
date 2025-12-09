@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -26,38 +27,9 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
   static const Color greenAccent = Color(0xFF10B981);
 
   // Reports data
-  final List<ReportItem> reports = [
-    ReportItem(
-      title: 'Comprehensive Neuro Assessment',
-      date: 'November 25, 2024',
-      testsCount: 15,
-      adRisk: 23,
-      pdRisk: 18,
-      isReady: true,
-      iconColor: Color(0xFF8B5CF6),
-      iconBgColor: Color(0xFFF3E8FF),
-    ),
-    ReportItem(
-      title: 'Speech & Cognitive Analysis',
-      date: 'November 18, 2024',
-      testsCount: 6,
-      adRisk: 19,
-      pdRisk: 15,
-      isReady: true,
-      iconColor: Color(0xFF3B82F6),
-      iconBgColor: Color(0xFFDBEAFE),
-    ),
-    ReportItem(
-      title: 'Motor & Gait Evaluation',
-      date: 'November 12, 2024',
-      testsCount: 5,
-      adRisk: 19,
-      pdRisk: 17,
-      isReady: true,
-      iconColor: Color(0xFFF97316),
-      iconBgColor: Color(0xFFFFF7ED),
-    ),
-  ];
+  List<ReportItem> reports = [];
+  bool _isLoading = true;
+
 
   @override
   void initState() {
@@ -66,7 +38,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..forward();
-
+    _loadReports();
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -80,7 +52,57 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     _pageController.dispose();
     super.dispose();
   }
+  Future<void> _loadReports() async {
+  final result = await ApiService.listReports();
+  
+  if (mounted) {
+    setState(() {
+      _isLoading = false;
+      if (result['success']) {
+        final items = result['data']['items'] as List? ?? [];
+        reports = items.map((r) => ReportItem(
+          id: r['id'],
+          title: r['title'] ?? 'Report',
+          date: _formatDate(r['created_at']),
+          testsCount: r['sessions_count'] ?? 0,
+          adRisk: (r['ad_risk_score'] ?? 0).toInt(),
+          pdRisk: (r['pd_risk_score'] ?? 0).toInt(),
+          isReady: r['status'] == 'completed',
+          pdfUrl: r['pdf_url'],
+          iconColor: purpleAccent,
+          iconBgColor: const Color(0xFFF3E8FF),
+        )).toList();
+      }
+    });
+  }
+}
 
+String _formatDate(String? dateStr) {
+  if (dateStr == null) return '';
+  final date = DateTime.tryParse(dateStr);
+  if (date == null) return dateStr;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return '${months[date.month - 1]} ${date.day}, ${date.year}';
+}
+
+Future<void> _createReport() async {
+  final result = await ApiService.createReport(title: 'New Assessment Report');
+  if (result['success']) {
+    _loadReports();  // Refresh list
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result['error'] ?? 'Failed to create report')),
+    );
+  }
+}
+
+Future<void> _downloadReport(int reportId) async {
+  final url = ApiService.getReportDownloadUrl(reportId: reportId);
+  // Open URL or download
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Download: $url')),
+  );
+}
   void _onNavItemTapped(int index) {
     HapticFeedback.selectionClick();
     
@@ -105,7 +127,14 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
     return Scaffold(
+      backgroundColor: bgColor,
+      body: const Center(child: CircularProgressIndicator()),
+    );
+  }
+  
+  return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
         child: Column(
@@ -721,22 +750,26 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
 
 // Data model
 class ReportItem {
+  final int id;
   final String title;
   final String date;
   final int testsCount;
   final int adRisk;
   final int pdRisk;
   final bool isReady;
+  final String? pdfUrl;
   final Color iconColor;
   final Color iconBgColor;
 
   ReportItem({
+    required this.id,
     required this.title,
     required this.date,
     required this.testsCount,
     required this.adRisk,
     required this.pdRisk,
     required this.isReady,
+    this.pdfUrl,
     required this.iconColor,
     required this.iconBgColor,
   });

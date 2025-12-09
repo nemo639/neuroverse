@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -91,20 +92,41 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> with Ticker
   }
 
   Future<void> _handleSendResetLink() async {
-    HapticFeedback.mediumImpact();
+  HapticFeedback.mediumImpact();
+  
+  if (_validateEmail(emailController.text.trim())) {
+    setState(() => isLoading = true);
     
-    if (_validateEmail(emailController.text.trim())) {
-      setState(() => isLoading = true);
-      
-      // Simulate API call
-      await Future.delayed(const Duration(milliseconds: 2000));
-      
-      setState(() {
-        isLoading = false;
-        emailSent = true;
-      });
+    // Call API
+    final result = await ApiService.forgotPassword(
+      email: emailController.text.trim(),
+    );
+    
+    setState(() => isLoading = false);
+    
+    if (result['success']) {
+      // Navigate to OTP screen for password reset
+      Navigator.pushNamed(
+        context,
+        '/otp-verification',
+        arguments: {
+          'email': emailController.text.trim(),
+          'type': 'forgot_password',
+        },
+      );
+    } else {
+      // Show error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['error'] ?? 'Failed to send reset code'),
+          backgroundColor: redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
     }
   }
+}
 
   void _handleResendEmail() {
     HapticFeedback.lightImpact();

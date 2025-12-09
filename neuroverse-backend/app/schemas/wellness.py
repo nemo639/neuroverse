@@ -1,156 +1,157 @@
+"""
+Wellness Schemas - Daily wellness and lifestyle tracking
+Correlates with cognitive/motor performance per proposal
+"""
+
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-from datetime import datetime, date, time
+from typing import Optional, List
+from datetime import datetime, date
+from enum import Enum
 
 
-# ============== Wellness Data Schemas ==============
+class SleepQuality(str, Enum):
+    POOR = "poor"
+    FAIR = "fair"
+    GOOD = "good"
+    EXCELLENT = "excellent"
 
-class WellnessDataCreate(BaseModel):
-    """Schema for creating wellness data entry."""
-    date: date
+
+class Mood(str, Enum):
+    VERY_BAD = "very_bad"
+    BAD = "bad"
+    NEUTRAL = "neutral"
+    GOOD = "good"
+    VERY_GOOD = "very_good"
+
+
+# ============== REQUEST SCHEMAS ==============
+
+class WellnessEntryCreate(BaseModel):
+    """Create wellness entry - daily tracking data."""
+    # Sleep
+    sleep_hours: Optional[float] = Field(None, ge=0, le=24)
+    sleep_quality: Optional[SleepQuality] = None
     
-    # Screen Time (in minutes)
-    total_screen_time: Optional[int] = Field(None, ge=0)
-    gaming_time: Optional[int] = Field(None, ge=0)
-    social_media_time: Optional[int] = Field(None, ge=0)
-    productivity_time: Optional[int] = Field(None, ge=0)
-    other_screen_time: Optional[int] = Field(None, ge=0)
+    # Digital wellness (per proposal)
+    screen_time_hours: Optional[float] = Field(None, ge=0, le=24)
+    gaming_hours: Optional[float] = Field(None, ge=0, le=24)
     
-    # Sleep Data (in minutes)
-    sleep_duration: Optional[int] = Field(None, ge=0)
-    sleep_quality_score: Optional[float] = Field(None, ge=0, le=100)
-    bedtime: Optional[datetime] = None
-    wake_time: Optional[datetime] = None
+    # Mental state
+    stress_level: Optional[int] = Field(None, ge=1, le=10)
+    mood: Optional[Mood] = None
+    anxiety_level: Optional[int] = Field(None, ge=1, le=10)
     
-    # Activity
-    steps_count: Optional[int] = Field(None, ge=0)
-    active_minutes: Optional[int] = Field(None, ge=0)
+    # Physical activity
+    physical_activity_minutes: Optional[int] = Field(None, ge=0)
+    exercise_type: Optional[str] = None
     
-    # App Usage
-    app_usage: Optional[Dict[str, int]] = None  # {"app_name": minutes}
+    # Hydration
+    water_intake_glasses: Optional[int] = Field(None, ge=0)
     
-    # Device
-    device_type: Optional[str] = None
+    # Notes
+    notes: Optional[str] = Field(None, max_length=500)
+    
+    # Date (defaults to today)
+    entry_date: Optional[date] = None
 
 
-class WellnessDataUpdate(BaseModel):
-    """Schema for updating wellness data."""
-    total_screen_time: Optional[int] = Field(None, ge=0)
-    gaming_time: Optional[int] = Field(None, ge=0)
-    social_media_time: Optional[int] = Field(None, ge=0)
-    productivity_time: Optional[int] = Field(None, ge=0)
-    sleep_duration: Optional[int] = Field(None, ge=0)
-    sleep_quality_score: Optional[float] = Field(None, ge=0, le=100)
-    steps_count: Optional[int] = Field(None, ge=0)
-    active_minutes: Optional[int] = Field(None, ge=0)
-    app_usage: Optional[Dict[str, int]] = None
+class WellnessEntryUpdate(BaseModel):
+    """Update wellness entry."""
+    sleep_hours: Optional[float] = Field(None, ge=0, le=24)
+    sleep_quality: Optional[SleepQuality] = None
+    screen_time_hours: Optional[float] = Field(None, ge=0, le=24)
+    gaming_hours: Optional[float] = Field(None, ge=0, le=24)
+    stress_level: Optional[int] = Field(None, ge=1, le=10)
+    mood: Optional[Mood] = None
+    anxiety_level: Optional[int] = Field(None, ge=1, le=10)
+    physical_activity_minutes: Optional[int] = Field(None, ge=0)
+    exercise_type: Optional[str] = None
+    water_intake_glasses: Optional[int] = Field(None, ge=0)
+    notes: Optional[str] = Field(None, max_length=500)
 
 
-class WellnessDataResponse(BaseModel):
-    """Schema for wellness data response."""
-    id: str
-    date: date
-    total_screen_time: Optional[int]
-    gaming_time: Optional[int]
-    social_media_time: Optional[int]
-    productivity_time: Optional[int]
-    other_screen_time: Optional[int]
-    sleep_duration: Optional[int]
-    sleep_quality_score: Optional[float]
-    steps_count: Optional[int]
-    active_minutes: Optional[int]
-    app_usage: Optional[Dict[str, int]]
+# ============== RESPONSE SCHEMAS ==============
+
+class WellnessEntryResponse(BaseModel):
+    """Wellness entry response."""
+    id: int
+    user_id: int
     
+    # Sleep
+    sleep_hours: Optional[float] = None
+    sleep_quality: Optional[str] = None
+    
+    # Digital wellness
+    screen_time_hours: Optional[float] = None
+    gaming_hours: Optional[float] = None
+    
+    # Mental state
+    stress_level: Optional[int] = None
+    mood: Optional[str] = None
+    anxiety_level: Optional[int] = None
+    
+    # Physical activity
+    physical_activity_minutes: Optional[int] = None
+    exercise_type: Optional[str] = None
+    
+    # Hydration
+    water_intake_glasses: Optional[int] = None
+    
+    # Notes
+    notes: Optional[str] = None
+    
+    # Timestamps
+    entry_date: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
 
-# ============== Wellness Goals Schemas ==============
-
-class WellnessGoalCreate(BaseModel):
-    """Schema for creating wellness goals."""
-    daily_screen_limit: int = Field(360, ge=0)  # 6 hours default
-    gaming_limit: int = Field(120, ge=0)  # 2 hours default
-    social_media_limit: int = Field(60, ge=0)  # 1 hour default
-    target_sleep_duration: int = Field(480, ge=0)  # 8 hours default
-    target_bedtime: Optional[str] = None  # "22:00"
-    target_wake_time: Optional[str] = None  # "06:00"
-    daily_steps_goal: int = Field(10000, ge=0)
-    active_minutes_goal: int = Field(30, ge=0)
+class WellnessMetric(BaseModel):
+    """Single wellness metric for dashboard."""
+    name: str
+    current_value: Optional[float] = None
+    unit: str
+    trend: str  # "up", "down", "stable"
+    trend_percentage: float = 0.0
+    status: str  # "good", "fair", "poor"
+    recommendation: Optional[str] = None
 
 
-class WellnessGoalUpdate(BaseModel):
-    """Schema for updating wellness goals."""
-    daily_screen_limit: Optional[int] = Field(None, ge=0)
-    gaming_limit: Optional[int] = Field(None, ge=0)
-    social_media_limit: Optional[int] = Field(None, ge=0)
-    target_sleep_duration: Optional[int] = Field(None, ge=0)
-    target_bedtime: Optional[str] = None
-    target_wake_time: Optional[str] = None
-    daily_steps_goal: Optional[int] = Field(None, ge=0)
-    active_minutes_goal: Optional[int] = Field(None, ge=0)
-
-
-class WellnessGoalResponse(BaseModel):
-    """Schema for wellness goal response."""
-    id: str
-    daily_screen_limit: int
-    gaming_limit: int
-    social_media_limit: int
-    target_sleep_duration: int
-    target_bedtime: Optional[str]
-    target_wake_time: Optional[str]
-    daily_steps_goal: int
-    active_minutes_goal: int
+class WellnessDashboardResponse(BaseModel):
+    """Wellness dashboard - summary and trends."""
+    user_id: int
     
-    class Config:
-        from_attributes = True
-
-
-# ============== Dashboard Schemas ==============
-
-class TodayWellness(BaseModel):
-    """Schema for today's wellness summary."""
-    total_screen_time: int  # minutes
-    screen_time_hours: float  # hours
-    gaming_time: int
-    sleep_duration: int
-    sleep_hours: float
-    steps_count: int
-    active_minutes: int
+    # Today's entry (if exists)
+    today_entry: Optional[WellnessEntryResponse] = None
+    has_logged_today: bool = False
     
-    # Comparison with goals
-    screen_time_vs_limit: float  # percentage (e.g., 87% of limit)
-    is_below_limit: bool
-    sleep_vs_target: float  # percentage
-    steps_vs_goal: float  # percentage
-
-
-class WeeklyPattern(BaseModel):
-    """Schema for weekly pattern data."""
-    day: str  # "Mon", "Tue", etc.
-    date: date
-    screen_time: int  # minutes
-    screen_time_hours: float
-    is_today: bool
-
-
-class WellnessDashboard(BaseModel):
-    """Schema for wellness dashboard response."""
-    today: TodayWellness
-    weekly_patterns: List[WeeklyPattern]
-    goals: WellnessGoalResponse
+    # Weekly averages
+    avg_sleep_hours: Optional[float] = None
+    avg_screen_time: Optional[float] = None
+    avg_stress_level: Optional[float] = None
+    avg_activity_minutes: Optional[float] = None
     
-    # Insights
-    insight_message: str
-    trend: str  # "improving", "stable", "declining"
-    recommendations: List[str]
+    # Metrics breakdown
+    metrics: List[WellnessMetric] = []
+    
+    # Correlation insights (wellness vs test performance)
+    correlations: List[dict] = []  # [{"factor": "sleep", "correlation": 0.65, "insight": "..."}, ...]
+    
+    # Streak
+    logging_streak: int = 0
+    
+    # Recommendations
+    recommendations: List[str] = []
 
 
-class WellnessHistory(BaseModel):
-    """Schema for wellness history."""
-    data: List[WellnessDataResponse]
-    total_days: int
-    avg_screen_time: float
-    avg_sleep: float
-    avg_steps: int
+class WellnessHistoryResponse(BaseModel):
+    """Wellness history for charts."""
+    entries: List[WellnessEntryResponse]
+    total: int
+    
+    # Aggregated data for charts
+    daily_summary: List[dict] = []  # [{"date": "2024-01-01", "sleep": 7, "stress": 5, ...}, ...]
+    weekly_averages: List[dict] = []
+    monthly_averages: List[dict] = []

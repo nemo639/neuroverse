@@ -1,38 +1,67 @@
-from typing import Optional
+"""
+User Service - Profile management and dashboard data
+"""
+
+from datetime import datetime, timedelta
+from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from fastapi import HTTPException, status, UploadFile
-import os
-import uuid
-import aiofiles
+from sqlalchemy import select, func, and_
+from sqlalchemy.orm import selectinload
+from fastapi import HTTPException, status
 
 from app.models.user import User
-from app.schemas.user import UserUpdate, UserPreferencesUpdate, UserProfileResponse
-from app.core.config import settings
+from app.models.test_session import TestSession
+from app.models.test_result import TestResult
+from app.schemas.user import (
+    UserUpdateRequest, UserProfileResponse, UserDashboardResponse,
+    CategoryScore
+)
 
 
 class UserService:
-    """Service for handling user operations."""
+    """User profile and dashboard service."""
     
     def __init__(self, db: AsyncSession):
         self.db = db
     
-    async def get_user_by_id(self, user_id: str) -> Optional[User]:
+    async def get_user(self, user_id: int) -> User:
         """Get user by ID."""
         result = await self.db.execute(
             select(User).where(User.id == user_id)
         )
-        return result.scalar_one_or_none()
-    
-    async def get_user_profile(self, user_id: str) -> UserProfileResponse:
-        """Get user profile."""
-        user = await self.get_user_by_id(user_id)
+        user = result.scalar_one_or_none()
         
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
+        
+        return user
+    
+    async def update_user(self, user_id: int, data: UserUpdateRequest) -> User:
+        """Update user profile."""
+        user = await self.get_user(user_id)
+        
+        # Update only provided fields
+        update_data = data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(user, field, value)
+        
+        user.updated_at = datetime.utcnow()
+        
+        await self.db.commit()
+        await self.db.refresh(user)
+        
+        return user
+    
+    async def get_profile(self, user_id: int) -> UserProfileResponse:
+        """Get full user profile with stats."""
+        user = await self.get_user(user_id)
+        
+        # Get test stats
+        total_tests = await self._get_total_tests(user_id)
+        last_test_date = await self._get_last_test_date(user_id)
         
         return UserProfileResponse(
             id=user.id,
@@ -42,154 +71,221 @@ class UserService:
             full_name=user.full_name,
             phone=user.phone,
             date_of_birth=user.date_of_birth,
-            gender=user.gender.value if user.gender else None,
-            location=user.location,
-            profile_photo=user.profile_photo,
-            is_email_verified=user.is_email_verified,
-            is_premium=user.is_premium,
-            member_since=user.created_at
+            age=user.age,
+            gender=user.gender,
+            profile_image_path=user.profile_image_path,
+            is_verified=user.is_verified,
+            ad_risk_score=user.ad_risk_score or 0.0,
+            pd_risk_score=user.pd_risk_score or 0.0,
+            cognitive_score=user.cognitive_score or 0.0,
+            speech_score=user.speech_score or 0.0,
+            motor_score=user.motor_score or 0.0,
+            gait_score=user.gait_score or 0.0,
+            facial_score=user.facial_score or 0.0,
+            ad_stage=user.ad_stage,
+            pd_stage=user.pd_stage,
+            total_tests=total_tests,
+            last_test_date=last_test_date,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
         )
     
-    async def update_user_profile(
-        self,
-        user_id: str,
-        update_data: UserUpdate
-    ) -> User:
-        """Update user profile."""
-        user = await self.get_user_by_id(user_id)
+    async def get_dashboard(self, user_id: int) -> UserDashboardResponse:
+        """Get user dashboard data."""
+        user = await self.get_user(user_id)
         
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
+        # Get category breakdown
+        categories = await self._get_category_scores(user_id, user)
         
-        # Update only provided fields
-        update_dict = update_data.model_dump(exclude_unset=True)
+        # Get stats
+        total_tests = await self._get_total_tests(user_id)
+        tests_this_week = await self._get_tests_this_week(user_id)
+        last_assessment = await self._get_last_test_date(user_id)
         
-        for field, value in update_dict.items():
-            if value is not None:
-                setattr(user, field, value)
+        # Get risk trend (last 30 days)
+        risk_trend = await self._get_risk_trend(user_id)
         
-        await self.db.flush()
+        # Determine recommended next test
+        recommended = self._get_recommended_test(categories)
+        
+        return UserDashboardResponse(
+            user_id=user.id,
+            full_name=user.full_name,
+            ad_risk_score=user.ad_risk_score or 0.0,
+            pd_risk_score=user.pd_risk_score or 0.0,
+            ad_stage=user.ad_stage,
+            pd_stage=user.pd_stage,
+            categories=categories,
+            total_tests_completed=total_tests,
+            tests_this_week=tests_this_week,
+            last_assessment_date=last_assessment,
+            next_recommended_test=recommended,
+            risk_trend=risk_trend,
+        )
+    
+    async def update_profile_image(self, user_id: int, image_path: str) -> User:
+        """Update user's profile image."""
+        user = await self.get_user(user_id)
+        user.profile_image_path = image_path
+        user.updated_at = datetime.utcnow()
+        
+        await self.db.commit()
+        await self.db.refresh(user)
         
         return user
     
-    async def update_user_preferences(
-        self,
-        user_id: str,
-        preferences: UserPreferencesUpdate
-    ) -> User:
-        """Update user preferences."""
-        user = await self.get_user_by_id(user_id)
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-        
-        # Update only provided fields
-        if preferences.notifications_enabled is not None:
-            user.notifications_enabled = preferences.notifications_enabled
-        if preferences.email_notifications is not None:
-            user.email_notifications = preferences.email_notifications
-        if preferences.research_participation is not None:
-            user.research_participation = preferences.research_participation
-        
-        await self.db.flush()
-        
-        return user
+    # ============== PRIVATE HELPERS ==============
     
-    async def upload_profile_photo(
-        self,
-        user_id: str,
-        file: UploadFile
-    ) -> str:
-        """Upload user profile photo."""
-        user = await self.get_user_by_id(user_id)
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+    async def _get_total_tests(self, user_id: int) -> int:
+        """Get total completed test sessions."""
+        result = await self.db.execute(
+            select(func.count(TestSession.id)).where(
+                and_(
+                    TestSession.user_id == user_id,
+                    TestSession.status == "completed"
+                )
             )
-        
-        # Validate file type
-        if file.content_type not in settings.ALLOWED_IMAGE_TYPES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid file type. Allowed: JPEG, PNG, WebP"
-            )
-        
-        # Check file size
-        content = await file.read()
-        if len(content) > settings.MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File too large. Max size: {settings.MAX_FILE_SIZE // (1024*1024)}MB"
-            )
-        
-        # Create upload directory if not exists
-        upload_dir = os.path.join(settings.UPLOAD_DIR, "profiles")
-        os.makedirs(upload_dir, exist_ok=True)
-        
-        # Generate unique filename
-        ext = file.filename.split(".")[-1] if file.filename else "jpg"
-        filename = f"{user_id}_{uuid.uuid4().hex[:8]}.{ext}"
-        filepath = os.path.join(upload_dir, filename)
-        
-        # Delete old photo if exists
-        if user.profile_photo:
-            old_path = user.profile_photo.replace("/uploads/", f"{settings.UPLOAD_DIR}/")
-            if os.path.exists(old_path):
-                os.remove(old_path)
-        
-        # Save new photo
-        async with aiofiles.open(filepath, "wb") as f:
-            await f.write(content)
-        
-        # Update user profile
-        user.profile_photo = f"/uploads/profiles/{filename}"
-        await self.db.flush()
-        
-        return user.profile_photo
+        )
+        return result.scalar() or 0
     
-    async def delete_profile_photo(self, user_id: str) -> None:
-        """Delete user profile photo."""
-        user = await self.get_user_by_id(user_id)
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+    async def _get_tests_this_week(self, user_id: int) -> int:
+        """Get tests completed this week."""
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        result = await self.db.execute(
+            select(func.count(TestSession.id)).where(
+                and_(
+                    TestSession.user_id == user_id,
+                    TestSession.status == "completed",
+                    TestSession.completed_at >= week_ago
+                )
             )
+        )
+        return result.scalar() or 0
+    
+    async def _get_last_test_date(self, user_id: int) -> Optional[datetime]:
+        """Get date of last completed test."""
+        result = await self.db.execute(
+            select(TestSession.completed_at)
+            .where(
+                and_(
+                    TestSession.user_id == user_id,
+                    TestSession.status == "completed"
+                )
+            )
+            .order_by(TestSession.completed_at.desc())
+            .limit(1)
+        )
+        row = result.first()
+        return row[0] if row else None
+    
+    async def _get_category_scores(self, user_id: int, user: User) -> List[CategoryScore]:
+        """Get scores by category."""
+        categories_config = [
+            ("cognitive", "Cognitive", user.cognitive_score),
+            ("speech", "Speech", user.speech_score),
+            ("motor", "Motor", user.motor_score),
+            ("gait", "Gait", user.gait_score),
+            ("facial", "Facial", user.facial_score),
+        ]
         
-        if user.profile_photo:
-            # Delete file
-            filepath = user.profile_photo.replace("/uploads/", f"{settings.UPLOAD_DIR}/")
-            if os.path.exists(filepath):
-                os.remove(filepath)
+        result = []
+        for cat_id, cat_name, score in categories_config:
+            # Get last test date for category
+            last_tested = await self._get_last_category_test(user_id, cat_id)
+            tests_count = await self._get_category_test_count(user_id, cat_id)
             
-            user.profile_photo = None
-            await self.db.flush()
+            result.append(CategoryScore(
+                category=cat_id,
+                score=score or 0.0,
+                status=self._score_to_status(score or 0.0),
+                last_tested=last_tested,
+                tests_completed=tests_count,
+            ))
+        
+        return result
     
-    async def delete_user_account(self, user_id: str) -> None:
-        """Delete user account and all associated data."""
-        user = await self.get_user_by_id(user_id)
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+    async def _get_last_category_test(self, user_id: int, category: str) -> Optional[datetime]:
+        """Get last test date for a category."""
+        result = await self.db.execute(
+            select(TestSession.completed_at)
+            .where(
+                and_(
+                    TestSession.user_id == user_id,
+                    TestSession.category == category,
+                    TestSession.status == "completed"
+                )
             )
+            .order_by(TestSession.completed_at.desc())
+            .limit(1)
+        )
+        row = result.first()
+        return row[0] if row else None
+    
+    async def _get_category_test_count(self, user_id: int, category: str) -> int:
+        """Get test count for a category."""
+        result = await self.db.execute(
+            select(func.count(TestSession.id)).where(
+                and_(
+                    TestSession.user_id == user_id,
+                    TestSession.category == category,
+                    TestSession.status == "completed"
+                )
+            )
+        )
+        return result.scalar() or 0
+    
+    async def _get_risk_trend(self, user_id: int, days: int = 30) -> List[dict]:
+        """Get risk score trend over time."""
+        # Get completed sessions with results in date range
+        start_date = datetime.utcnow() - timedelta(days=days)
         
-        # Delete profile photo
-        if user.profile_photo:
-            filepath = user.profile_photo.replace("/uploads/", f"{settings.UPLOAD_DIR}/")
-            if os.path.exists(filepath):
-                os.remove(filepath)
+        result = await self.db.execute(
+            select(TestSession, TestResult)
+            .join(TestResult, TestSession.id == TestResult.session_id)
+            .where(
+                and_(
+                    TestSession.user_id == user_id,
+                    TestSession.status == "completed",
+                    TestSession.completed_at >= start_date
+                )
+            )
+            .order_by(TestSession.completed_at)
+        )
         
-        # Delete user (cascades to related data)
-        await self.db.delete(user)
-        await self.db.flush()
+        trend = []
+        for session, test_result in result.all():
+            trend.append({
+                "date": session.completed_at.strftime("%Y-%m-%d") if session.completed_at else None,
+                "ad": test_result.ad_risk_score or 0,
+                "pd": test_result.pd_risk_score or 0,
+                "category": session.category,
+            })
+        
+        return trend
+    
+    def _score_to_status(self, score: float) -> str:
+        """Convert score to status string."""
+        if score >= 80:
+            return "normal"
+        elif score >= 60:
+            return "mild"
+        elif score >= 40:
+            return "moderate"
+        else:
+            return "severe"
+    
+    def _get_recommended_test(self, categories: List[CategoryScore]) -> Optional[str]:
+        """Determine which test to recommend next."""
+        # Find category with oldest test or no tests
+        oldest = None
+        oldest_date = None
+        
+        for cat in categories:
+            if cat.tests_completed == 0:
+                return cat.category  # Prioritize untested categories
+            
+            if oldest_date is None or (cat.last_tested and cat.last_tested < oldest_date):
+                oldest_date = cat.last_tested
+                oldest = cat.category
+        
+        return oldest

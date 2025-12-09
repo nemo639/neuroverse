@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -14,17 +15,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
   bool _isLoading = false;
   bool _hasChanges = false;
   
-  // Controllers for editable fields only
-  final TextEditingController _firstNameController = TextEditingController(text: 'Sarah');
-  final TextEditingController _lastNameController = TextEditingController(text: 'Ahmed');
-  final TextEditingController _phoneController = TextEditingController(text: '+92 300 1234567');
-  final TextEditingController _locationController = TextEditingController(text: 'Islamabad, Pakistan');
+  final TextEditingController _firstNameController = TextEditingController();
+final TextEditingController _lastNameController = TextEditingController();
+final TextEditingController _phoneController = TextEditingController();
+final TextEditingController _locationController = TextEditingController();
   
-  // Non-editable info (displayed only)
-  final String _email = 'sarah.ahmed@neuroverse.pk';
-  final String _dob = 'January 15, 1990';
-  final String _gender = 'Female';
-  final String _memberSince = 'November 2024';
+  // Non-editable info (loaded from API)
+  String _email = '';
+  String _dob = '';
+  String _gender = '';
+  String _memberSince = '';
+  bool _isLoadingData = true;
 
   // Design colors
   static const Color bgColor = Color(0xFFF7F7F7);
@@ -43,7 +44,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..forward();
-
+    _loadUserData();
     // Listen for changes
     _firstNameController.addListener(_onFieldChanged);
     _lastNameController.addListener(_onFieldChanged);
@@ -73,19 +74,60 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
     _locationController.dispose();
     super.dispose();
   }
+// Add this new method:
+Future<void> _loadUserData() async {
+  final result = await ApiService.getUserProfile();
 
+  if (mounted && result['success']) {
+    final data = result['data'];
+    setState(() {
+      _firstNameController.text = data['first_name'] ?? '';
+      _lastNameController.text = data['last_name'] ?? '';
+      _phoneController.text = data['phone'] ?? '';
+      _email = data['email'] ?? '';
+      _gender = data['gender'] ?? '';
+      
+      // Format date of birth
+      if (data['date_of_birth'] != null) {
+        _dob = data['date_of_birth'];
+      }
+      
+      // Format member since
+      if (data['created_at'] != null) {
+        final date = DateTime.parse(data['created_at']);
+        _memberSince = '${_monthName(date.month)} ${date.year}';
+      }
+      
+      _isLoadingData = false;
+      _hasChanges = false;  // Reset after loading
+    });
+  } else {
+    setState(() => _isLoadingData = false);
+  }
+}
+
+String _monthName(int month) {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  return months[month - 1];
+}
   Future<void> _saveChanges() async {
-    if (!_hasChanges) return;
-    
-    HapticFeedback.mediumImpact();
-    setState(() => _isLoading = true);
-    
-    // Simulate API call
-    await Future.delayed(const Duration(milliseconds: 1500));
-    
-    setState(() => _isLoading = false);
-    
-    if (mounted) {
+  if (!_hasChanges) return;
+  
+  HapticFeedback.mediumImpact();
+  setState(() => _isLoading = true);
+  
+  // Call API
+  final result = await ApiService.updateProfile(
+    firstName: _firstNameController.text.trim(),
+    lastName: _lastNameController.text.trim(),
+    phone: _phoneController.text.trim(),
+  );
+  
+  setState(() => _isLoading = false);
+  
+  if (mounted) {
+    if (result['success']) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -104,9 +146,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
           margin: const EdgeInsets.all(16),
         ),
       );
-      Navigator.pop(context, true); // Return true to indicate changes saved
+      Navigator.pop(context, true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['error'] ?? 'Update failed'),
+          backgroundColor: redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
     }
   }
+}
 
   void _discardChanges() {
     if (_hasChanges) {
@@ -149,6 +202,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
+    // Add loading check FIRST
+  if (_isLoadingData) {
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
     return WillPopScope(
       onWillPop: () async {
         _discardChanges();

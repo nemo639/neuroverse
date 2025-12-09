@@ -1,287 +1,156 @@
+"""
+Authentication Service - Registration, Login, OTP, Password Reset
+"""
+
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from fastapi import HTTPException, status
 
-# CORRECT IMPORT PATH based on your folder structure
-from app.models.user import User, OTPCode, PasswordResetToken, UserStatusEnum
-from app.schemas.user import UserRegister, TokenResponse
+from app.models.user import User
+from app.schemas.auth import (
+    RegisterRequest, LoginRequest, AuthUserResponse, 
+    VerifyOTPRequest, ForgotPasswordRequest
+)
 from app.core.security import (
-    get_password_hash,
-    verify_password,
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    generate_otp,
-    generate_reset_token,
+    get_password_hash, verify_password,
+    create_access_token, create_refresh_token,
+    generate_otp, decode_token
 )
 from app.core.config import settings
+from app.services.email_service import EmailService
 
 
 class AuthService:
-    """Service for handling authentication operations."""
+    """Authentication service for user management."""
     
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.email_service = EmailService()
     
-    async def get_user_by_email(self, email: str) -> Optional[User]:
-        """Get user by email."""
-        result = await self.db.execute(
-            select(User).where(User.email == email.lower())
+    async def register(self, data: RegisterRequest) -> User:
+        """Register a new user and send OTP."""
+        # Check if email exists
+        existing = await self.db.execute(
+            select(User).where(User.email == data.email)
         )
-        return result.scalar_one_or_none()
-    
-    async def get_user_by_id(self, user_id: str) -> Optional[User]:
-        """Get user by ID."""
-        result = await self.db.execute(
-            select(User).where(User.id == user_id)
-        )
-        return result.scalar_one_or_none()
-    
-    async def register_user(self, user_data: UserRegister) -> Tuple[User, str]:
-        """Register a new user and generate OTP."""
-        # Check if user already exists
-        existing_user = await self.get_user_by_email(user_data.email)
-        if existing_user:
-            if existing_user.is_email_verified:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already registered"
-                )
-            # Delete unverified user to allow re-registration
-            await self.db.delete(existing_user)
-            await self.db.flush()
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
         
-        # Create new user
+        # Create user
         user = User(
-            email=user_data.email.lower(),
-            password_hash=get_password_hash(user_data.password),
-            first_name=user_data.first_name,
-            last_name=user_data.last_name,
-            phone=user_data.phone,
-            date_of_birth=user_data.date_of_birth,
-            gender=user_data.gender,
-            status=UserStatusEnum.PENDING_VERIFICATION,
+            email=data.email,
+            password_hash=get_password_hash(data.password),
+            first_name=data.first_name,
+            last_name=data.last_name,
+            phone=data.phone,
+            date_of_birth=data.date_of_birth,
+            gender=data.gender,
+            is_verified=False,
         )
+        
+        # Generate OTP
+        otp = generate_otp()
+        user.otp_code = otp
+        user.otp_expires_at = datetime.utcnow() + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
         
         self.db.add(user)
-        await self.db.flush()
+        await self.db.commit()
+        await self.db.refresh(user)
         
-        # Generate and save OTP
-        otp_code = await self._create_otp(user.id, "signup")
-        
-        return user, otp_code
-    
-    async def login_user(self, email: str, password: str) -> TokenResponse:
-        """Authenticate user and return tokens."""
-        user = await self.get_user_by_email(email)
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password"
-            )
-        
-        # Check if account is locked
-        if user.locked_until and user.locked_until > datetime.utcnow():
-            remaining_time = (user.locked_until - datetime.utcnow()).seconds // 60
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Account locked. Try again in {remaining_time} minutes."
-            )
-        
-        # Verify password
-        if not verify_password(password, user.password_hash):
-            # Increment failed attempts
-            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
-            
-            # Lock account after 5 failed attempts
-            if user.failed_login_attempts >= 5:
-                user.locked_until = datetime.utcnow() + timedelta(minutes=30)
-            
-            await self.db.flush()
-            
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password"
-            )
-        
-        # Check if email is verified
-        if not user.is_email_verified:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Email not verified. Please verify your email first."
-            )
-        
-        # Reset failed attempts on successful login
-        user.failed_login_attempts = 0
-        user.locked_until = None
-        user.last_login = datetime.utcnow()
-        await self.db.flush()
-        
-        # Generate tokens
-        return self._create_tokens(user.id)
-    
-    async def verify_otp(self, email: str, otp: str, purpose: str) -> User:
-        """Verify OTP code."""
-        user = await self.get_user_by_email(email)
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-        
-        # Find valid OTP
-        result = await self.db.execute(
-            select(OTPCode).where(
-                and_(
-                    OTPCode.user_id == user.id,
-                    OTPCode.code == otp,
-                    OTPCode.purpose == purpose,
-                    OTPCode.is_used == False,
-                    OTPCode.expires_at > datetime.utcnow()
-                )
-            )
-        )
-        otp_record = result.scalar_one_or_none()
-        
-        if not otp_record:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired OTP"
-            )
-        
-        # Mark OTP as used
-        otp_record.is_used = True
-        
-        # If signup verification, activate user
-        if purpose == "signup":
-            user.is_email_verified = True
-            user.status = UserStatusEnum.ACTIVE
-        
-        await self.db.flush()
+        # Send OTP email (async, don't wait)
+        try:
+            await self.email_service.send_otp_email(user.email, otp, user.first_name)
+        except Exception as e:
+            print(f"Failed to send OTP email: {e}")
         
         return user
     
-    async def resend_otp(self, email: str, purpose: str) -> str:
-        """Resend OTP code."""
-        user = await self.get_user_by_email(email)
+    async def verify_otp(self, data: VerifyOTPRequest) -> User:
+        """Verify OTP and activate user."""
+        user = await self._get_user_by_email(data.email)
         
-        if not user:
+        if user.is_verified:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User already verified"
             )
         
-        # Invalidate old OTPs
-        result = await self.db.execute(
-            select(OTPCode).where(
-                and_(
-                    OTPCode.user_id == user.id,
-                    OTPCode.purpose == purpose,
-                    OTPCode.is_used == False
-                )
+        if not user.otp_code or user.otp_code != data.otp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid OTP"
             )
-        )
-        old_otps = result.scalars().all()
-        for otp in old_otps:
-            otp.is_used = True
+        
+        if user.otp_expires_at and user.otp_expires_at < datetime.utcnow():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OTP expired"
+            )
+        
+        # Verify user
+        user.is_verified = True
+        user.otp_code = None
+        user.otp_expires_at = None
+        
+        await self.db.commit()
+        await self.db.refresh(user)
+        
+        return user
+    
+    async def resend_otp(self, email: str) -> bool:
+        """Resend OTP to user."""
+        user = await self._get_user_by_email(email)
+        
+        if user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User already verified"
+            )
         
         # Generate new OTP
-        otp_code = await self._create_otp(user.id, purpose)
+        otp = generate_otp()
+        user.otp_code = otp
+        user.otp_expires_at = datetime.utcnow() + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
         
-        return otp_code
+        await self.db.commit()
+        
+        # Send OTP email
+        try:
+            await self.email_service.send_otp_email(user.email, otp, user.first_name)
+            return True
+        except Exception as e:
+            print(f"Failed to send OTP email: {e}")
+            return False
     
-    async def forgot_password(self, email: str) -> Optional[str]:
-        """Generate password reset token."""
-        user = await self.get_user_by_email(email)
+    async def login(self, data: LoginRequest) -> tuple[User, str, str]:
+        """Authenticate user and return tokens."""
+        user = await self._get_user_by_email(data.email)
         
-        if not user:
-            # Don't reveal if email exists
-            return None
+        if not verify_password(data.password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
         
-        # Generate reset token
-        token = generate_reset_token()
-        expires_at = datetime.utcnow() + timedelta(hours=1)
+        if not user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Please verify your email first"
+            )
         
-        reset_token = PasswordResetToken(
-            user_id=user.id,
-            token=token,
-            expires_at=expires_at
-        )
+        # Generate tokens
+        access_token = create_access_token({"sub": str(user.id)})
+        refresh_token = create_refresh_token({"sub": str(user.id)})
         
-        self.db.add(reset_token)
-        await self.db.flush()
-        
-        return token
+        return user, access_token, refresh_token
     
-    async def reset_password(self, token: str, new_password: str) -> User:
-        """Reset password using token."""
-        result = await self.db.execute(
-            select(PasswordResetToken).where(
-                and_(
-                    PasswordResetToken.token == token,
-                    PasswordResetToken.is_used == False,
-                    PasswordResetToken.expires_at > datetime.utcnow()
-                )
-            )
-        )
-        reset_token = result.scalar_one_or_none()
-        
-        if not reset_token:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired reset token"
-            )
-        
-        # Get user
-        user = await self.get_user_by_id(reset_token.user_id)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-        
-        # Update password
-        user.password_hash = get_password_hash(new_password)
-        reset_token.is_used = True
-        
-        await self.db.flush()
-        
-        return user
-    
-    async def change_password(
-        self,
-        user_id: str,
-        current_password: str,
-        new_password: str
-    ) -> User:
-        """Change user password."""
-        user = await self.get_user_by_id(user_id)
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-        
-        # Verify current password
-        if not verify_password(current_password, user.password_hash):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Current password is incorrect"
-            )
-        
-        # Update password
-        user.password_hash = get_password_hash(new_password)
-        await self.db.flush()
-        
-        return user
-    
-    async def refresh_tokens(self, refresh_token: str) -> TokenResponse:
-        """Refresh access token using refresh token."""
+    async def refresh_tokens(self, refresh_token: str) -> tuple[str, str]:
+        """Refresh access and refresh tokens."""
         payload = decode_token(refresh_token)
         
         if not payload or payload.get("type") != "refresh":
@@ -291,41 +160,93 @@ class AuthService:
             )
         
         user_id = payload.get("sub")
-        user = await self.get_user_by_id(user_id)
-        
-        if not user or user.status != UserStatusEnum.ACTIVE:
+        if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive"
+                detail="Invalid token payload"
             )
         
-        return self._create_tokens(user_id)
+        # Verify user exists
+        result = await self.db.execute(select(User).where(User.id == int(user_id)))
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Generate new tokens
+        new_access = create_access_token({"sub": str(user.id)})
+        new_refresh = create_refresh_token({"sub": str(user.id)})
+        
+        return new_access, new_refresh
     
-    async def _create_otp(self, user_id: str, purpose: str) -> str:
-        """Create and save OTP code."""
-        otp_code = generate_otp()
-        expires_at = datetime.utcnow() + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
+    async def forgot_password(self, email: str) -> bool:
+        """Send password reset OTP."""
+        user = await self._get_user_by_email(email)
         
-        otp = OTPCode(
-            user_id=user_id,
-            code=otp_code,
-            purpose=purpose,
-            expires_at=expires_at
-        )
+        # Generate OTP for reset
+        otp = generate_otp()
+        user.otp_code = otp
+        user.otp_expires_at = datetime.utcnow() + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
         
-        self.db.add(otp)
-        await self.db.flush()
+        await self.db.commit()
         
-        return otp_code
+        # Send reset email
+        try:
+            await self.email_service.send_password_reset_email(user.email, otp, user.first_name)
+            return True
+        except Exception as e:
+            print(f"Failed to send reset email: {e}")
+            return False
     
-    def _create_tokens(self, user_id: str) -> TokenResponse:
-        """Create access and refresh tokens."""
-        access_token = create_access_token(data={"sub": user_id})
-        refresh_token = create_refresh_token(data={"sub": user_id})
+    async def reset_password(self, email: str, otp: str, new_password: str) -> bool:
+        """Reset password with OTP verification."""
+        user = await self._get_user_by_email(email)
         
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        )
+        if not user.otp_code or user.otp_code != otp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid OTP"
+            )
+        
+        if user.otp_expires_at and user.otp_expires_at < datetime.utcnow():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OTP expired"
+            )
+        
+        # Update password
+        user.password_hash = get_password_hash(new_password)
+        user.otp_code = None
+        user.otp_expires_at = None
+        
+        await self.db.commit()
+        return True
+    
+    async def _get_user_by_email(self, email: str) -> User:
+        """Get user by email or raise 404."""
+        result = await self.db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        return user
+    
+    async def get_user_by_id(self, user_id: int) -> User:
+        """Get user by ID or raise 404."""
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        return user

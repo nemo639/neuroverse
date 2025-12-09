@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class XAIScreen extends StatefulWidget {
   const XAIScreen({super.key});
@@ -15,6 +16,8 @@ class _XAIScreenState extends State<XAIScreen> with TickerProviderStateMixin {
   int _selectedNavIndex = 3;
   int _selectedModuleIndex = 0;
 
+  Map<String, dynamic>? _resultData;
+bool _isLoading = true;
   // Design colors matching home screen
   static const Color bgColor = Color(0xFFF7F7F7);
   static const Color mintGreen = Color(0xFFB8E8D1);
@@ -56,8 +59,44 @@ class _XAIScreenState extends State<XAIScreen> with TickerProviderStateMixin {
         statusBarIconBrightness: Brightness.dark,
       ),
     );
+    // Get result from arguments or load latest
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null && args['result'] != null) {
+      setState(() {
+        _resultData = args['result'];
+        _isLoading = false;
+      });
+      _initializeModulesFromData();
+    } else {
+      _loadLatestResult();
+    }
+  });
   }
+Future<void> _loadLatestResult() async {
+  // Load from user dashboard or latest session
+  final result = await ApiService.getUserDashboard();
+  
+  if (mounted) {
+    setState(() {
+      _isLoading = false;
+      if (result['success']) {
+        _resultData = result['data'];
+      }
+    });
+    _initializeModulesFromData();
+  }
+}
 
+void _initializeModulesFromData() {
+  // If we have XAI data from result, use it
+  // Otherwise use default/placeholder modules
+  if (_resultData != null && _resultData!['xai_explanation'] != null) {
+    // Parse XAI data and create modules dynamically
+    // For now, use existing _initializeModules with hardcoded data
+  }
+  _initializeModules();
+}
   void _initializeModules() {
     modules = [
       // Speech Module
@@ -267,7 +306,14 @@ class _XAIScreenState extends State<XAIScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+   if (_isLoading) {
     return Scaffold(
+      backgroundColor: bgColor,
+      body: const Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  return  Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
         child: Column(

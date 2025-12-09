@@ -1,24 +1,21 @@
-from app.models.user import User, OTPCode, PasswordResetToken, GenderEnum, UserStatusEnum
-from app.models.test import Test, Report, TestResult, TestCategoryEnum, TestStatusEnum, RiskLevelEnum
-from app.models.wellness import WellnessData, WellnessGoal
+"""
+NeuroVerse Models
+"""
+
+from app.models.user import User
+from app.models.test_session import TestSession, TestCategory, SessionStatus
+from app.models.test_item import TestItem
+from app.models.test_result import TestResult
+from app.models.wellness import WellnessEntry
+from app.models.report import Report
 
 __all__ = [
-    # User models
     "User",
-    "OTPCode",
-    "PasswordResetToken",
-    "GenderEnum",
-    "UserStatusEnum",
-    
-    # Test models
-    "Test",
-    "Report",
+    "TestSession",
+    "TestCategory",
+    "SessionStatus",
+    "TestItem",
     "TestResult",
-    "TestCategoryEnum",
-    "TestStatusEnum",
-    "RiskLevelEnum",
-    
-    # Wellness models
-    "WellnessData",
-    "WellnessGoal",
+    "WellnessEntry",
+    "Report",
 ]

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class GaitMovementTestScreen extends StatefulWidget {
   const GaitMovementTestScreen({super.key});
@@ -11,7 +12,8 @@ class GaitMovementTestScreen extends StatefulWidget {
 
 class _GaitMovementTestScreenState extends State<GaitMovementTestScreen> with SingleTickerProviderStateMixin {
   late AnimationController _pageController;
-
+  int? _sessionId;
+bool _isSubmitting = false;
   // Design colors matching home screen
   static const Color bgColor = Color(0xFFF7F7F7);
   static const Color mintGreen = Color(0xFFB8E8D1);
@@ -24,10 +26,8 @@ class _GaitMovementTestScreenState extends State<GaitMovementTestScreen> with Si
 
   // Individual test items (for display in progress)
   final List<String> testItems = [
-    'Walking Test',
-    'Turn-in-Place',
-    'Balance Assessment',
-  ];
+  'Gait Assessment',
+];
 
   // Is the comprehensive test completed
   bool isTestCompleted = false;
@@ -46,7 +46,46 @@ class _GaitMovementTestScreenState extends State<GaitMovementTestScreen> with Si
         statusBarIconBrightness: Brightness.dark,
       ),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null) {
+      setState(() => _sessionId = args['sessionId']);
+      _startSession();
+    }
+  });
+}
+
+Future<void> _startSession() async {
+  if (_sessionId != null) {
+    await ApiService.startTestSession(sessionId: _sessionId!);
   }
+}
+
+Future<void> _submitAndComplete(Map<String, dynamic> rawData) async {
+  if (_sessionId == null) return;
+  
+  // Submit all gait data as one item
+  await ApiService.addTestItem(
+    sessionId: _sessionId!,
+    itemName: 'gait_comprehensive',
+    itemType: 'gait',
+    rawData: rawData,
+  );
+
+  setState(() => _isSubmitting = true);
+  final result = await ApiService.completeTestSession(sessionId: _sessionId!);
+  setState(() => _isSubmitting = false);
+
+  if (mounted) {
+    if (result['success']) {
+      Navigator.pushReplacementNamed(context, '/XAI', arguments: {'result': result['data']});
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result['error'] ?? 'Failed'), backgroundColor: Colors.red),
+      );
+    }
+  }
+}
 
   @override
   void dispose() {
@@ -56,7 +95,14 @@ class _GaitMovementTestScreenState extends State<GaitMovementTestScreen> with Si
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return WillPopScope(
+    onWillPop: () async {
+      if (_sessionId != null && !isTestCompleted) {
+        await ApiService.cancelTestSession(sessionId: _sessionId!);
+      }
+      return true;
+    },
+    child: Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
         child: SingleChildScrollView(
@@ -81,6 +127,7 @@ class _GaitMovementTestScreenState extends State<GaitMovementTestScreen> with Si
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -692,11 +739,16 @@ class _GaitMovementTestScreenState extends State<GaitMovementTestScreen> with Si
               )
             else
               GestureDetector(
-                onTap: () {
+                onTap: () async {
                   HapticFeedback.mediumImpact();
-                  // Start comprehensive test
-                },
-                child: Container(
+                   final result = await Navigator.pushNamed(context, '/test/gait_assessment_test');
+    
+    if (result != null && result is Map<String, dynamic>) {
+      setState(() => isTestCompleted = true);
+      await _submitAndComplete(result);
+    }
+  },
+  child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(

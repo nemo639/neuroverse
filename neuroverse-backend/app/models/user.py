@@ -1,95 +1,69 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Date, Enum, ForeignKey, Integer
-from sqlalchemy.orm import relationship
+"""
+User Model - Stores user profile, authentication, and risk scores
+"""
+
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Date
 from sqlalchemy.sql import func
-from datetime import datetime
-import uuid
-import enum
-
+from sqlalchemy.orm import relationship
 from app.db.database import Base
-
-
-class GenderEnum(str, enum.Enum):
-    MALE = "male"
-    FEMALE = "female"
-    OTHER = "other"
-
-
-class UserStatusEnum(str, enum.Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    PENDING_VERIFICATION = "pending_verification"
 
 
 class User(Base):
     __tablename__ = "users"
-    
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
-    first_name = Column(String(100), nullable=False)
-    last_name = Column(String(100), nullable=False)
-    phone = Column(String(20), nullable=True)
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Authentication
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+
+    # Profile
+    first_name = Column(String, nullable=False)
+    last_name = Column(String, nullable=False)
+    phone = Column(String, nullable=True)
     date_of_birth = Column(Date, nullable=True)
-    gender = Column(Enum(GenderEnum), nullable=True)
-    profile_photo = Column(String(500), nullable=True)
-    location = Column(String(255), nullable=True)
-    is_active = Column(Boolean, default=True)
-    is_email_verified = Column(Boolean, default=False)
-    status = Column(Enum(UserStatusEnum), default=UserStatusEnum.PENDING_VERIFICATION)
-    
-    # Premium & Preferences
-    is_premium = Column(Boolean, default=False)
-    notifications_enabled = Column(Boolean, default=True)
-    email_notifications = Column(Boolean, default=True)
-    research_participation = Column(Boolean, default=False)
-    
-    # Login tracking
-    failed_login_attempts = Column(Integer, default=0)
-    locked_until = Column(DateTime(timezone=True), nullable=True)
-    last_login = Column(DateTime(timezone=True), nullable=True)
-    
+    gender = Column(String, nullable=True)  # "male", "female", "other"
+    profile_image_path = Column(String, nullable=True)
+
+    # OTP & Verification
+    otp_code = Column(String, nullable=True)
+    otp_expires_at = Column(DateTime, nullable=True)
+    is_verified = Column(Boolean, default=False)
+
+    # Risk Scores (0-100, calculated by ML fusion)
+    ad_risk_score = Column(Float, default=0.0)  # Alzheimer's Disease risk
+    pd_risk_score = Column(Float, default=0.0)  # Parkinson's Disease risk
+
+    # Category-specific scores (0-100)
+    cognitive_score = Column(Float, default=0.0)
+    speech_score = Column(Float, default=0.0)
+    motor_score = Column(Float, default=0.0)
+    gait_score = Column(Float, default=0.0)
+    facial_score = Column(Float, default=0.0)
+
+    # Stage Classification
+    ad_stage = Column(String, nullable=True)  # "CN", "MCI", "Mild AD", "Moderate AD", "Severe AD"
+    pd_stage = Column(String, nullable=True)  # "Normal", "Early PD", "Moderate PD", "Advanced PD"
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
-    # Relationships - ALL OF THEM
-    otp_codes = relationship("OTPCode", back_populates="user", cascade="all, delete-orphan")
-    password_reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
-    tests = relationship("Test", back_populates="user", cascade="all, delete-orphan")
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    test_sessions = relationship("TestSession", back_populates="user", cascade="all, delete-orphan")
+    wellness_entries = relationship("WellnessEntry", back_populates="user", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="user", cascade="all, delete-orphan")
-    wellness_data = relationship("WellnessData", back_populates="user", cascade="all, delete-orphan")
-    
+
     @property
     def full_name(self) -> str:
         return f"{self.first_name} {self.last_name}"
-    
+
     @property
-    def member_since(self) -> datetime:
-        return self.created_at
-
-
-class OTPCode(Base):
-    __tablename__ = "otp_codes"
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    code = Column(String(6), nullable=False)
-    purpose = Column(String(50), nullable=False)
-    is_used = Column(Boolean, default=False)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    user = relationship("User", back_populates="otp_codes")
-
-
-class PasswordResetToken(Base):
-    __tablename__ = "password_reset_tokens"
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    token = Column(String(255), unique=True, nullable=False)
-    is_used = Column(Boolean, default=False)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    user = relationship("User", back_populates="password_reset_tokens")
+    def age(self) -> int | None:
+        if self.date_of_birth:
+            from datetime import date
+            today = date.today()
+            return today.year - self.date_of_birth.year - (
+                (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day)
+            )
+        return None

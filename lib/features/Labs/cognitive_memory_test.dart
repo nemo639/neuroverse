@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class CognitiveMemoryTestScreen extends StatefulWidget {
   const CognitiveMemoryTestScreen({super.key});
@@ -8,6 +9,11 @@ class CognitiveMemoryTestScreen extends StatefulWidget {
   @override
   State<CognitiveMemoryTestScreen> createState() => _CognitiveMemoryTestScreenState();
 }
+
+// Add these new variables:
+  int? _sessionId;
+  bool _isSubmitting = false;
+  Map<String, Map<String, dynamic>> _testResults = {};  // Store raw data per test component
 
 class _CognitiveMemoryTestScreenState extends State<CognitiveMemoryTestScreen> with SingleTickerProviderStateMixin {
   late AnimationController _pageController;
@@ -64,6 +70,17 @@ class _CognitiveMemoryTestScreenState extends State<CognitiveMemoryTestScreen> w
         statusBarIconBrightness: Brightness.dark,
       ),
     );
+    // Get sessionId from arguments after build
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null) {
+      setState(() {
+        _sessionId = args['sessionId'];
+      });
+      _startSession();
+    }
+  });
+
   }
 
   @override
@@ -71,10 +88,106 @@ class _CognitiveMemoryTestScreenState extends State<CognitiveMemoryTestScreen> w
     _pageController.dispose();
     super.dispose();
   }
+  // Add this method:
+Future<void> _startSession() async {
+  if (_sessionId != null) {
+    await ApiService.startTestSession(sessionId: _sessionId!);
+  }
+}
+  Future<void> _submitTestItem(String testName, Map<String, dynamic> rawData) async {
+  if (_sessionId == null) return;
+
+  final result = await ApiService.addTestItem(
+    sessionId: _sessionId!,
+    itemName: testName.toLowerCase().replaceAll(' ', '_'),  // stroop_test, n_back_memory, word_list_recall
+    itemType: 'cognitive',
+    rawData: rawData,
+  );
+
+  if (result['success']) {
+    _testResults[testName] = rawData;
+  }
+}
+Future<void> _completeSession() async {
+  if (_sessionId == null) return;
+
+  setState(() => _isSubmitting = true);
+
+  final result = await ApiService.completeTestSession(sessionId: _sessionId!);
+
+  setState(() => _isSubmitting = false);
+
+  if (mounted) {
+    if (result['success']) {
+      // Navigate to results/XAI screen
+      Navigator.pushReplacementNamed(
+        context,
+        '/XAI',
+        arguments: {'result': result['data']},
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['error'] ?? 'Failed to complete session'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
+
+void _showCompleteDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text(
+        'All Tests Completed! 🎉',
+        style: TextStyle(fontWeight: FontWeight.w700),
+      ),
+      content: const Text(
+        'Ready to analyze your results and get AI-powered insights?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            'Review Tests',
+            style: TextStyle(color: Colors.black.withOpacity(0.5)),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _completeSession();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: purpleAccent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: _isSubmitting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
+              : const Text('Get Results', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+      return WillPopScope(
+    onWillPop: () async {
+      if (_sessionId != null && completedCount == 0) {
+        await ApiService.cancelTestSession(sessionId: _sessionId!);
+      }
+      return true;
+    },
+    child:  Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
         child: SingleChildScrollView(
@@ -97,7 +210,8 @@ class _CognitiveMemoryTestScreenState extends State<CognitiveMemoryTestScreen> w
           ),
         ),
       ),
-    );
+    ),
+      );
   }
 
   Widget _buildHeader() {
@@ -589,10 +703,47 @@ class _CognitiveMemoryTestScreenState extends State<CognitiveMemoryTestScreen> w
               )
             else
               GestureDetector(
-                onTap: () {
+                onTap: () async {
                   HapticFeedback.mediumImpact();
-                  // Navigate to specific test
-                },
+                  // Navigate to actual test screen and get result
+    String routeName = '';
+    if (test.name == 'Stroop Test') {
+      routeName = '/test/stroop';
+    } else if (test.name == 'N-Back Memory') {
+      routeName = '/test/nback';
+    } else if (test.name == 'Word List Recall') {
+      routeName = '/test/word-recall';
+    }
+
+    if (routeName.isNotEmpty) {
+      // Navigate and wait for result
+      final result = await Navigator.pushNamed(context, routeName);
+      
+      if (result != null && result is Map<String, dynamic>) {
+        // Submit test item to API
+        await _submitTestItem(test.name, result);
+
+        // Mark as completed
+        setState(() {
+          final index = testComponents.indexWhere((t) => t.name == test.name);
+          if (index != -1) {
+            testComponents[index] = TestComponent(
+              name: test.name,
+              description: test.description,
+              duration: test.duration,
+              isCompleted: true,
+              icon: test.icon,
+            );
+          }
+        });
+
+        // If all tests completed, show complete dialog
+        if (completedCount == totalCount) {
+          _showCompleteDialog();
+        }
+      }
+    }
+  },
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -658,7 +809,7 @@ class TestComponent {
   final String name;
   final String description;
   final String duration;
-  final bool isCompleted;
+  bool isCompleted;  // Remove 'final'
   final IconData icon;
 
   TestComponent({

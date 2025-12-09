@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,7 +16,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _selectedNavIndex = 0;
   int _selectedTab = 0;
   final String userName = "Dr. Sarah";
-
+  // Add these new variables:
+bool _isLoading = true;
+Map<String, dynamic>? _dashboardData;
+Map<String, dynamic>? _wellnessData;
+String _userFirstName = 'User';
+int _adRisk = 0;
+int _pdRisk = 0;
+int _overallRisk = 0;
+String _riskLevel = 'Low';
+String _lastUpdated = '';
+double _screenTime = 0;
+double _gamingHours = 0;
+double _sleepHours = 0;
+List<dynamic> _recentTests = [];
   // Design colors from reference
   static const Color bgColor = Color(0xFFF7F7F7);
   static const Color mintGreen = Color(0xFFB8E8D1);
@@ -32,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..forward();
-
+    _loadData();  // Add this
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -46,7 +60,46 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _pageController.dispose();
     super.dispose();
   }
+// Add this new method:
+Future<void> _loadData() async {
+  // Load user dashboard
+  final dashResult = await ApiService.getUserDashboard();
+  final wellnessResult = await ApiService.getWellnessDashboard();
+  final userResult = await ApiService.getCurrentUser();
 
+  if (mounted) {
+    setState(() {
+      _isLoading = false;
+
+      if (userResult['success']) {
+        _userFirstName = userResult['data']['first_name'] ?? 'User';
+      }
+
+      if (dashResult['success']) {
+        _dashboardData = dashResult['data'];
+        _adRisk = (_dashboardData?['ad_risk_score'] ?? 0).toInt();
+        _pdRisk = (_dashboardData?['pd_risk_score'] ?? 0).toInt();
+        _overallRisk = ((_adRisk + _pdRisk) / 2).toInt();
+        _riskLevel = _getRiskLevel(_overallRisk);
+        _recentTests = _dashboardData?['categories'] ?? [];
+      }
+
+      if (wellnessResult['success']) {
+        _wellnessData = wellnessResult['data'];
+        _screenTime = (_wellnessData?['today']?['screen_time_hours'] ?? 0).toDouble();
+        _gamingHours = (_wellnessData?['today']?['gaming_hours'] ?? 0).toDouble();
+        _sleepHours = (_wellnessData?['today']?['sleep_hours'] ?? 0).toDouble();
+      }
+    });
+  }
+}
+
+String _getRiskLevel(int score) {
+  if (score < 25) return 'Low';
+  if (score < 50) return 'Moderate';
+  if (score < 75) return 'Elevated';
+  return 'High';
+}
   void _onNavItemTapped(int index) {
     HapticFeedback.selectionClick();
     
@@ -71,6 +124,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
     return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
@@ -352,7 +413,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                       ],
                     ),
-                    _buildCircularIndicator(42),
+                    _buildCircularIndicator(_overallRisk),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -364,8 +425,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         color: mintGreen,
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Text(
-                        'Moderate Risk',
+                      child: Text(
+                        '$_riskLevel Risk',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -472,43 +533,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildStatsRow() {
-    return _buildAnimatedWidget(
-      delay: 0.2,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
-                title: "Alzheimer's",
-                subtitle: 'Risk Score',
-                value: '23',
-                unit: '/100',
-                badge: 'Low',
-                badgeColor: const Color(0xFF059669),
-                bgColor: mintGreen,
-                icon: Icons.psychology_outlined,
-              ),
+ Widget _buildStatsRow() {
+  return _buildAnimatedWidget(
+    delay: 0.2,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildStatCard(
+              title: "Alzheimer's",
+              subtitle: 'Risk Score',
+              value: _adRisk.toString(),
+              unit: '/100',
+              badge: _getRiskLevel(_adRisk),
+              badgeColor: _adRisk < 25 ? const Color(0xFF059669) : const Color(0xFFEF4444),
+              bgColor: mintGreen,
+              icon: Icons.psychology_outlined,
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _buildStatCard(
-                title: "Parkinson's",
-                subtitle: 'Risk Score',
-                value: '18',
-                unit: '/100',
-                badge: 'Low',
-                badgeColor: const Color(0xFF059669),
-                bgColor: softLavender,
-                icon: Icons.timeline_rounded,
-              ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: _buildStatCard(
+              title: "Parkinson's",
+              subtitle: 'Risk Score',
+              value: _pdRisk.toString(),
+              unit: '/100',
+              badge: _getRiskLevel(_pdRisk),
+              badgeColor: _pdRisk < 25 ? const Color(0xFF059669) : const Color(0xFFEF4444),
+              bgColor: softLavender,
+              icon: Icons.timeline_rounded,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildStatCard({
     required String title,
@@ -873,8 +934,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            const Text(
-                              '5.2',
+                            Text(
+                              _screenTime.toStringAsFixed(1),
                               style: TextStyle(
                                 fontSize: 48,
                                 fontWeight: FontWeight.w800,
@@ -964,7 +1025,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     _buildWellnessStatCard(
                       icon: Icons.phone_android_rounded,
                       label: 'Screen',
-                      value: '5.2h',
+                      value: _screenTime.toStringAsFixed(1),
                       bgColor: softLavender,
                       iconColor: const Color(0xFF8B5CF6),
                     ),
@@ -972,7 +1033,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     _buildWellnessStatCard(
                       icon: Icons.sports_esports_rounded,
                       label: 'Gaming',
-                      value: '1.5h',
+                      value: _gamingHours.toStringAsFixed(1),
                       bgColor: const Color(0xFFFFE4E6),
                       iconColor: const Color(0xFFEC4899),
                     ),
@@ -980,7 +1041,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     _buildWellnessStatCard(
                       icon: Icons.bedtime_rounded,
                       label: 'Sleep',
-                      value: '7.2h',
+                      value: _sleepHours.toStringAsFixed(1),
                       bgColor: mintGreen,
                       iconColor: const Color(0xFF10B981),
                     ),

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class TestsScreen extends StatefulWidget {
   const TestsScreen({super.key});
@@ -21,6 +22,12 @@ class _TestsScreenState extends State<TestsScreen> with SingleTickerProviderStat
     3: false,
     4: false,
   };
+
+// Add these new variables:
+bool _isLoading = true;
+Map<String, dynamic>? _testDashboard;
+int _completedTestsCount = 0;
+Map<String, int> _categoryCompletedTests = {};
 
   // Design colors matching home screen
   static const Color bgColor = Color(0xFFF7F7F7);
@@ -111,7 +118,7 @@ class _TestsScreenState extends State<TestsScreen> with SingleTickerProviderStat
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..forward();
-
+    _loadData();  // Add this
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -125,7 +132,26 @@ class _TestsScreenState extends State<TestsScreen> with SingleTickerProviderStat
     _pageController.dispose();
     super.dispose();
   }
+  Future<void> _loadData() async {
+  final result = await ApiService.getTestDashboard();
 
+  if (mounted) {
+    setState(() {
+      _isLoading = false;
+      if (result['success']) {
+        _testDashboard = result['data'];
+        
+        // Parse completed tests per category
+        final categories = _testDashboard?['categories'] as List? ?? [];
+        for (var cat in categories) {
+          final catName = cat['category'] ?? '';
+          _categoryCompletedTests[catName] = cat['completed_tests'] ?? 0;
+          _completedTestsCount += (cat['completed_tests'] ?? 0) as int;
+        }
+      }
+    });
+  }
+}
   void _onNavItemTapped(int index) {
     HapticFeedback.selectionClick();
     
@@ -149,7 +175,7 @@ class _TestsScreenState extends State<TestsScreen> with SingleTickerProviderStat
   }
 
   int get completedTests {
-    return 3;
+   return _completedTestsCount;
   }
 
   int get totalTests {
@@ -158,6 +184,13 @@ class _TestsScreenState extends State<TestsScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );}
     return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
@@ -501,30 +534,57 @@ class _TestsScreenState extends State<TestsScreen> with SingleTickerProviderStat
           const SizedBox(height: 8),
           // View All / Start button
           GestureDetector(
-            onTap: () {
+            onTap: () async {
               HapticFeedback.mediumImpact();
               // Navigate to the specific test category detail screen
-              if (category.route == '/test/speech-language' || 
-                  category.route == '/test/cognitive-memory' ||
-                  category.route == '/test/motor-functions' ||
-                  category.route == '/test/gait-movement') {
-                Navigator.pushNamed(context, category.route);
-              } else {
-                // Show coming soon for other test categories
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      '${category.title} tests coming soon!',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    backgroundColor: category.color,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    margin: const EdgeInsets.all(16),
-                  ),
-                );
-              }
-            },
+               // Map route to category name for API
+    String categoryName = '';
+    if (category.route == '/test/speech-language') {
+      categoryName = 'speech';
+    } else if (category.route == '/test/cognitive-memory') {
+      categoryName = 'cognitive';
+    } else if (category.route == '/test/motor-functions') {
+      categoryName = 'motor';
+    } else if (category.route == '/test/gait-movement') {
+      categoryName = 'gait';
+    } else if (category.route == '/test/facial-eye') {
+      categoryName = 'facial';
+    }
+
+    if (categoryName.isNotEmpty) {
+      // Create test session first
+    final result = await ApiService.createTestSession(category: categoryName);
+      
+      if (result['success']) {
+        final sessionId = result['data']['id'];
+        Navigator.pushNamed(
+          context, 
+          category.route,
+          arguments: {'sessionId': sessionId, 'category': categoryName},
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Failed to start test'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${category.title} tests coming soon!'),
+          backgroundColor: category.color,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
+  },
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14),

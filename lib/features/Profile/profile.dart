@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -11,7 +12,11 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
   late AnimationController _pageController;
-  int _selectedNavIndex = 4; // Profile is selected
+  int _selectedNavIndex = 4;
+
+// Add these new variables:
+bool _isLoading = true;
+Map<String, dynamic>? _userData;
 
   // Design colors matching home screen
   static const Color bgColor = Color(0xFFF7F7F7);
@@ -30,13 +35,30 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..forward();
-
+    
+    
+    _loadUserData();  // Add this line
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.dark,
       ),
     );
+  }
+
+  Future<void> _loadUserData() async {
+  final result = await ApiService.getUserProfile();
+  final dashResult = await ApiService.getUserDashboard();
+  dashResult['data']['total_tests_completed'];
+  dashResult['data']['tests_this_week'];
+  if (mounted) {
+    setState(() {
+      _isLoading = false;
+      if (result['success']) {
+        _userData = result['data'];
+      }
+    });
+  }
   }
 
   @override
@@ -68,8 +90,18 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   @override
-  Widget build(BuildContext context) {
+  @override
+Widget build(BuildContext context) {
+  if (_isLoading) {
     return Scaffold(
+      backgroundColor: bgColor,
+      body: const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+
+  return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
         child: SingleChildScrollView(
@@ -153,88 +185,93 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildProfileAvatar() {
-    return _buildAnimatedWidget(
-      delay: 0.1,
-      child: Column(
-        children: [
-          Stack(
-            children: [
-              Container(
-                width: 100,
-                height: 100,
+ Widget _buildProfileAvatar() {
+  final firstName = _userData?['first_name'] ?? 'User';
+  final lastName = _userData?['last_name'] ?? '';
+  final email = _userData?['email'] ?? 'user@email.com';
+  final initial = firstName.isNotEmpty ? firstName[0].toUpperCase() : 'U';
+
+  return _buildAnimatedWidget(
+    delay: 0.1,
+    child: Column(
+      children: [
+        Stack(
+          children: [
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: darkCard,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: darkCard.withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    fontSize: 42,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -4,
+              right: -4,
+              child: Container(
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
-                  color: darkCard,
-                  borderRadius: BorderRadius.circular(28),
+                  color: (_userData?['is_verified'] ?? false) ? blueAccent : Colors.grey,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: bgColor, width: 3),
                   boxShadow: [
                     BoxShadow(
-                      color: darkCard.withOpacity(0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
+                      color: blueAccent.withOpacity(0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                child: const Center(
-                  child: Text(
-                    'D',
-                    style: TextStyle(
-                      fontSize: 42,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
+                child: const Icon(
+                  Icons.verified_rounded,
+                  color: Colors.white,
+                  size: 18,
                 ),
               ),
-              Positioned(
-                bottom: -4,
-                right: -4,
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: blueAccent,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: bgColor, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: blueAccent.withOpacity(0.4),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.verified_rounded,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Dr. Sarah Ahmed',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: Colors.black87,
-              letterSpacing: -0.5,
             ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text(
+          '$firstName $lastName',
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            color: Colors.black87,
+            letterSpacing: -0.5,
           ),
-          const SizedBox(height: 6),
-          Text(
-            'sarah.ahmed@neuroverse.pk',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.black.withOpacity(0.5),
-            ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          email,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.black.withOpacity(0.5),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildStatsRow() {
     return _buildAnimatedWidget(
@@ -1204,16 +1241,19 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildSignOutButton() {
-    return _buildAnimatedWidget(
-      delay: 0.3,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: GestureDetector(
-          onTap: () {
-            HapticFeedback.mediumImpact();
+  return _buildAnimatedWidget(
+    delay: 0.3,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: GestureDetector(
+        onTap: () async {
+          HapticFeedback.mediumImpact();
+          await ApiService.logout();
+          if (mounted) {
             Navigator.pushReplacementNamed(context, '/');
-          },
-          child: Container(
+          }
+        },
+        child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -143,28 +144,101 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
   }
 
   bool _validateEmail(String email) {
-    if (email.isEmpty) {
-      setState(() => emailError = "Email is required");
-      return false;
-    }
-    
-    // Comprehensive email validation
-    final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|org|net|edu|gov|mil|co|io|ai|pk|edu\.pk|gov\.pk|com\.pk|uk|co\.uk|de|fr|in|jp|au|ca|us|info|biz|xyz|app|dev|tech|online|site|web|cloud|email|mail|yahoo|gmail|hotmail|outlook)$',
-      caseSensitive: false,
-    );
-    
-    // Also check basic format
-    final basicEmailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$');
-    
-    if (!basicEmailRegex.hasMatch(email)) {
-      setState(() => emailError = "Please enter a valid email format");
-      return false;
-    }
-    
-    setState(() => emailError = null);
-    return true;
+  // Trim whitespace
+  email = email.trim();
+  
+  if (email.isEmpty) {
+    setState(() => emailError = "Email is required");
+    return false;
   }
+  
+  // Length check (email addresses shouldn't be too long)
+  if (email.length > 254) {
+    setState(() => emailError = "Email is too long");
+    return false;
+  }
+  
+  // Must contain exactly one @
+  if (email.split('@').length != 2) {
+    setState(() => emailError = "Email must contain exactly one @");
+    return false;
+  }
+  
+  // Check for consecutive dots
+  if (email.contains('..')) {
+    setState(() => emailError = "Email cannot contain consecutive dots");
+    return false;
+  }
+  
+  // Check for dots at invalid positions
+  if (email.startsWith('.') || email.endsWith('.')) {
+    setState(() => emailError = "Email cannot start or end with a dot");
+    return false;
+  }
+  
+  // Check for dot before/after @
+  if (email.contains('.@') || email.contains('@.')) {
+    setState(() => emailError = "Invalid dot placement near @");
+    return false;
+  }
+  
+  // Check for spaces
+  if (email.contains(' ')) {
+    setState(() => emailError = "Email cannot contain spaces");
+    return false;
+  }
+  
+  // Split email into local and domain parts
+  final parts = email.split('@');
+  final localPart = parts[0];
+  final domainPart = parts[1];
+  
+  // Local part validation (before @)
+  if (localPart.isEmpty || localPart.length > 64) {
+    setState(() => emailError = "Invalid email format");
+    return false;
+  }
+  
+  // Domain part validation (after @)
+  if (domainPart.isEmpty || domainPart.length > 253) {
+    setState(() => emailError = "Invalid domain");
+    return false;
+  }
+  
+  // Domain must contain at least one dot
+  if (!domainPart.contains('.')) {
+    setState(() => emailError = "Email must have a valid domain (e.g., .com)");
+    return false;
+  }
+  
+  // Check domain doesn't start or end with hyphen
+  if (domainPart.startsWith('-') || domainPart.endsWith('-')) {
+    setState(() => emailError = "Invalid domain format");
+    return false;
+  }
+  
+  // Main regex validation (RFC 5322 simplified but robust)
+  final emailRegex = RegExp(
+    r'^[a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    caseSensitive: false,
+  );
+  
+  if (!emailRegex.hasMatch(email)) {
+    setState(() => emailError = "Please enter a valid email address");
+    return false;
+  }
+  
+  // Check for valid TLD (at least 2 characters)
+  final tld = domainPart.split('.').last;
+  if (tld.length < 2) {
+    setState(() => emailError = "Invalid domain extension");
+    return false;
+  }
+  
+  // All checks passed
+  setState(() => emailError = null);
+  return true;
+}
 
   bool _validatePhone(String phone) {
     if (phone.isEmpty) {
@@ -338,24 +412,51 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
     }
   }
 
-  Future<void> _handleSignUp() async {
+ Future<void> _handleSignUp() async {
   if (_validateStep2()) {
     setState(() => isLoading = true);
 
-    await Future.delayed(const Duration(milliseconds: 2000));
+    // Format date as YYYY-MM-DD
+    String? dateOfBirth;
+    if (selectedDate != null) {
+      dateOfBirth = "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
+    }
+
+    // Call API
+    final result = await ApiService.register(
+      email: emailController.text.trim(),
+      password: passwordController.text,
+      firstName: firstNameController.text.trim(),
+      lastName: lastNameController.text.trim(),
+      phone: phoneController.text.trim(),
+      dateOfBirth: dateOfBirth,
+      gender: selectedGender?.toLowerCase(),
+    );
 
     setState(() => isLoading = false);
 
     if (mounted) {
-      // Navigate to OTP verification and pass the email + type expected by main.dart
-      Navigator.pushReplacementNamed(
-        context,
-        '/otp-verification',
-        arguments: {
-          'email': emailController.text.trim(),
-          'type': 'signup',
-        },
-      );
+      if (result['success']) {
+        // Navigate to OTP verification
+        Navigator.pushReplacementNamed(
+          context,
+          '/otp-verification',
+          arguments: {
+            'email': emailController.text.trim(),
+            'type': 'signup',
+          },
+        );
+      } else {
+        // Show error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Registration failed'),
+            backgroundColor: redAccent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
     }
   }
 }

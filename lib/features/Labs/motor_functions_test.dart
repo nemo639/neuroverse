@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/core/api_service.dart';
 
 class MotorFunctionsTestScreen extends StatefulWidget {
   const MotorFunctionsTestScreen({super.key});
@@ -11,7 +12,9 @@ class MotorFunctionsTestScreen extends StatefulWidget {
 
 class _MotorFunctionsTestScreenState extends State<MotorFunctionsTestScreen> with SingleTickerProviderStateMixin {
   late AnimationController _pageController;
-
+int? _sessionId;
+bool _isSubmitting = false;
+Map<String, Map<String, dynamic>> _testResults = {};
   // Design colors matching home screen
   static const Color bgColor = Color(0xFFF7F7F7);
   static const Color mintGreen = Color(0xFFB8E8D1);
@@ -64,7 +67,67 @@ class _MotorFunctionsTestScreenState extends State<MotorFunctionsTestScreen> wit
         statusBarIconBrightness: Brightness.dark,
       ),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null) {
+      setState(() => _sessionId = args['sessionId']);
+      _startSession();
+    }
+  });
+
+}
+
+  Future<void> _startSession() async {
+  if (_sessionId != null) {
+    await ApiService.startTestSession(sessionId: _sessionId!);
   }
+}
+
+Future<void> _submitTestItem(String testName, Map<String, dynamic> rawData) async {
+  if (_sessionId == null) return;
+  final result = await ApiService.addTestItem(
+    sessionId: _sessionId!,
+    itemName: testName.toLowerCase().replaceAll(' ', '_'),
+    itemType: 'motor',
+    rawData: rawData,
+  );
+  if (result['success']) _testResults[testName] = rawData;
+}
+
+Future<void> _completeSession() async {
+  if (_sessionId == null) return;
+  setState(() => _isSubmitting = true);
+  final result = await ApiService.completeTestSession(sessionId: _sessionId!);
+  setState(() => _isSubmitting = false);
+  if (mounted) {
+    if (result['success']) {
+      Navigator.pushReplacementNamed(context, '/XAI', arguments: {'result': result['data']});
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result['error'] ?? 'Failed'), backgroundColor: Colors.red),
+      );
+    }
+  }
+}
+
+void _showCompleteDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('All Tests Completed! 🎉', style: TextStyle(fontWeight: FontWeight.w700)),
+      content: const Text('Ready to analyze your motor functions?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text('Review', style: TextStyle(color: Colors.grey))),
+        ElevatedButton(
+          onPressed: () { Navigator.pop(context); _completeSession(); },
+          style: ElevatedButton.styleFrom(backgroundColor: orangeAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          child: const Text('Get Results', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
 
   @override
   void dispose() {
@@ -74,7 +137,14 @@ class _MotorFunctionsTestScreenState extends State<MotorFunctionsTestScreen> wit
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return WillPopScope(
+    onWillPop: () async {
+      if (_sessionId != null && completedCount == 0) {
+        await ApiService.cancelTestSession(sessionId: _sessionId!);
+      }
+      return true;
+    },
+    child: Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
         child: SingleChildScrollView(
@@ -97,6 +167,7 @@ class _MotorFunctionsTestScreenState extends State<MotorFunctionsTestScreen> wit
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -587,10 +658,36 @@ class _MotorFunctionsTestScreenState extends State<MotorFunctionsTestScreen> wit
               )
             else
               GestureDetector(
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                },
-                child: Container(
+               onTap: () async {
+    HapticFeedback.mediumImpact();
+    
+    String routeName = '';
+    if (test.name == 'Finger Tapping') {
+      routeName = '/test/finger-tap';
+    } else if (test.name == 'Spiral Drawing') {
+      routeName = '/test/spiral-drawing';
+    } else if (test.name == 'Gait Analysis') {
+      routeName = '/test/gait-analysis';
+    }
+
+    if (routeName.isNotEmpty) {
+      final result = await Navigator.pushNamed(context, routeName);
+      if (result != null && result is Map<String, dynamic>) {
+        await _submitTestItem(test.name, result);
+        setState(() {
+          final index = testComponents.indexWhere((t) => t.name == test.name);
+          if (index != -1) {
+            testComponents[index] = TestComponent(
+              name: test.name, description: test.description,
+              duration: test.duration, isCompleted: true, icon: test.icon,
+            );
+          }
+        });
+        if (completedCount == totalCount) _showCompleteDialog();
+      }
+    }
+  },
+  child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
@@ -655,7 +752,7 @@ class TestComponent {
   final String name;
   final String description;
   final String duration;
-  final bool isCompleted;
+  bool isCompleted;
   final IconData icon;
 
   TestComponent({
