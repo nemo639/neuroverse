@@ -2,6 +2,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:neuroverse/core/api_service.dart';
+import 'package:url_launcher/url_launcher.dart';  // For opening PDF
+import 'package:share_plus/share_plus.dart';
+
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -26,11 +29,13 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
   static const Color purpleAccent = Color(0xFF8B5CF6);
   static const Color greenAccent = Color(0xFF10B981);
 
-  // Reports data
-  List<ReportItem> reports = [];
-  bool _isLoading = true;
 
 
+// Add these:
+List<ReportItem> reports = [];
+bool _isLoading = true;
+bool _isGenerating = false;
+List<Map<String, dynamic>> _availableSessions = [];  // For selection
   @override
   void initState() {
     super.initState();
@@ -52,7 +57,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     _pageController.dispose();
     super.dispose();
   }
-  Future<void> _loadReports() async {
+ Future<void> _loadReports() async {
   final result = await ApiService.listReports();
   
   if (mounted) {
@@ -60,18 +65,7 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       _isLoading = false;
       if (result['success']) {
         final items = result['data']['items'] as List? ?? [];
-        reports = items.map((r) => ReportItem(
-          id: r['id'],
-          title: r['title'] ?? 'Report',
-          date: _formatDate(r['created_at']),
-          testsCount: r['sessions_count'] ?? 0,
-          adRisk: (r['ad_risk_score'] ?? 0).toInt(),
-          pdRisk: (r['pd_risk_score'] ?? 0).toInt(),
-          isReady: r['status'] == 'completed',
-          pdfUrl: r['pdf_url'],
-          iconColor: purpleAccent,
-          iconBgColor: const Color(0xFFF3E8FF),
-        )).toList();
+        reports = items.map((r) => ReportItem.fromJson(r)).toList();
       }
     });
   }
@@ -96,12 +90,108 @@ Future<void> _createReport() async {
   }
 }
 
-Future<void> _downloadReport(int reportId) async {
-  final url = ApiService.getReportDownloadUrl(reportId: reportId);
-  // Open URL or download
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Download: $url')),
+void _showGenerateReportDialog() {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => _GenerateReportSheet(
+      onGenerate: (String title, List<int> sessionIds) async {
+        Navigator.pop(context);
+        await _generateReport(title, sessionIds);
+      },
+    ),
   );
+}
+
+Future<void> _generateReport(String title, List<int> sessionIds) async {
+  setState(() => _isGenerating = true);
+  
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Row(
+        children: [
+          SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+          SizedBox(width: 12),
+          Text('Generating report...'),
+        ],
+      ),
+      duration: Duration(seconds: 10),
+    ),
+  );
+  
+  final result = await ApiService.createReport(
+    title: title,
+    sessionIds: sessionIds.isEmpty ? null : sessionIds,
+  );
+  
+  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+  setState(() => _isGenerating = false);
+  
+  if (result['success']) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Report generated successfully!'),
+        backgroundColor: greenAccent,
+        action: SnackBarAction(
+          label: 'View',
+          textColor: Colors.white,
+          onPressed: () => _viewReport(result['data']['id']),
+        ),
+      ),
+    );
+    _loadReports();  // Refresh list
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result['error'] ?? 'Failed to generate report'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
+
+Future<void> _viewReport(int reportId) async {
+  // Navigate to report detail screen
+  Navigator.pushNamed(context, '/report-detail', arguments: {'reportId': reportId});
+}
+
+
+
+Future<void> _downloadReport(int reportId) async {
+  final url = '${ApiService.baseUrl}/api/v1/reports/$reportId/download';
+  
+  if (await canLaunchUrl(Uri.parse(url))) {
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open PDF')),
+    );
+  }
+}
+
+  Future<void> _deleteReport(int reportId) async {
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete Report?'),
+      content: const Text('This action cannot be undone.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Delete', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  );
+  
+  if (confirm == true) {
+    final result = await ApiService.deleteReport(reportId: reportId);
+    if (result['success']) {
+      _loadReports();
+    }
+  }
 }
   void _onNavItemTapped(int index) {
     HapticFeedback.selectionClick();
@@ -481,6 +571,7 @@ Future<void> _downloadReport(int reportId) async {
                     onTap: () {
                       HapticFeedback.lightImpact();
                       // Download action
+                       _downloadReport(report.id);
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -523,6 +614,15 @@ Future<void> _downloadReport(int reportId) async {
                     onTap: () {
                       HapticFeedback.lightImpact();
                       // Share action
+
+                      if (report.pdfUrl != null) {
+    Share.share('Check out my report: ${report.pdfUrl}');
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No URL available for sharing')),
+    );
+  }
+
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -610,6 +710,7 @@ Future<void> _downloadReport(int reportId) async {
           onTap: () {
             HapticFeedback.mediumImpact();
             // Generate new report
+             _showGenerateReportDialog();
           },
           child: Container(
             width: double.infinity,
@@ -754,23 +855,280 @@ class ReportItem {
   final String title;
   final String date;
   final int testsCount;
-  final int adRisk;
-  final int pdRisk;
-  final bool isReady;
+  final int sessionsCount;
+  final int adRisk;      // Changed from double to int
+  final int pdRisk;      // Changed from double to int
+  final String status;
   final String? pdfUrl;
-  final Color iconColor;
-  final Color iconBgColor;
+  final Color iconColor;      // Add this
+  final Color iconBgColor;    // Add this
+  final List<Map<String, dynamic>> sessionDetails;
 
   ReportItem({
     required this.id,
     required this.title,
     required this.date,
     required this.testsCount,
+    required this.sessionsCount,
     required this.adRisk,
     required this.pdRisk,
-    required this.isReady,
+    required this.status,
     this.pdfUrl,
-    required this.iconColor,
-    required this.iconBgColor,
+    this.iconColor = const Color(0xFF8B5CF6),      // Add default
+    this.iconBgColor = const Color(0xFFF3E8FF),    // Add default
+    this.sessionDetails = const [],
   });
+
+  factory ReportItem.fromJson(Map<String, dynamic> json) {
+    return ReportItem(
+      id: json['id'],
+      title: json['title'] ?? 'Report',
+      date: _formatDate(json['created_at']),
+      testsCount: json['total_tests'] ?? 0,
+      sessionsCount: json['sessions_count'] ?? 0,
+      adRisk: (json['ad_risk_score'] ?? 0).toInt(),    // Convert to int
+      pdRisk: (json['pd_risk_score'] ?? 0).toInt(),    // Convert to int
+      status: json['status'] ?? 'completed',
+      pdfUrl: json['pdf_url'],
+      iconColor: const Color(0xFF8B5CF6),
+      iconBgColor: const Color(0xFFF3E8FF),
+      sessionDetails: List<Map<String, dynamic>>.from(json['sessions'] ?? []),
+    );
+  }
+  
+  static String _formatDate(String? dateStr) {
+    if (dateStr == null) return '';
+    final date = DateTime.tryParse(dateStr);
+    if (date == null) return dateStr;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+  
+  bool get isReady => status == 'completed';
+}
+
+class _GenerateReportSheet extends StatefulWidget {
+  final Function(String title, List<int> sessionIds) onGenerate;
+  
+  const _GenerateReportSheet({required this.onGenerate});
+  
+  @override
+  State<_GenerateReportSheet> createState() => _GenerateReportSheetState();
+}
+
+class _GenerateReportSheetState extends State<_GenerateReportSheet> {
+  final _titleController = TextEditingController(text: 'Comprehensive Assessment Report');
+  List<Map<String, dynamic>> _sessions = [];
+  Set<int> _selectedSessionIds = {};
+  bool _isLoading = true;
+  bool _selectAll = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSessions();
+  }
+
+  Future<void> _loadSessions() async {
+    final result = await ApiService.listTestSessions(status: 'completed');
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (result['success']) {
+          _sessions = List<Map<String, dynamic>>.from(result['data']['items'] ?? []);
+          // Select all by default
+          _selectedSessionIds = _sessions.map((s) => s['id'] as int).toSet();
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        children: [
+          // Handle
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                const Text(
+                  'Generate Report',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+          
+          // Report Title
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: TextField(
+              controller: _titleController,
+              decoration: InputDecoration(
+                labelText: 'Report Title',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Select All Toggle
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                const Text('Include Sessions:', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectAll = !_selectAll;
+                      if (_selectAll) {
+                        _selectedSessionIds = _sessions.map((s) => s['id'] as int).toSet();
+                      } else {
+                        _selectedSessionIds.clear();
+                      }
+                    });
+                  },
+                  child: Text(_selectAll ? 'Deselect All' : 'Select All'),
+                ),
+              ],
+            ),
+          ),
+          
+          // Sessions List
+          Expanded(
+            child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _sessions.isEmpty
+                ? const Center(child: Text('No completed sessions found'))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: _sessions.length,
+                    itemBuilder: (context, index) {
+                      final session = _sessions[index];
+                      final isSelected = _selectedSessionIds.contains(session['id']);
+                      
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: isSelected ? const Color(0xFF3B82F6) : Colors.grey[300]!,
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: ListTile(
+                          onTap: () {
+                            setState(() {
+                              if (isSelected) {
+                                _selectedSessionIds.remove(session['id']);
+                              } else {
+                                _selectedSessionIds.add(session['id']);
+                              }
+                              _selectAll = _selectedSessionIds.length == _sessions.length;
+                            });
+                          },
+                          leading: Checkbox(
+                            value: isSelected,
+                            onChanged: (value) {
+                              setState(() {
+                                if (value == true) {
+                                  _selectedSessionIds.add(session['id']);
+                                } else {
+                                  _selectedSessionIds.remove(session['id']);
+                                }
+                                _selectAll = _selectedSessionIds.length == _sessions.length;
+                              });
+                            },
+                          ),
+                          title: Text(
+                            _formatCategory(session['category']),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            '${session['items_count'] ?? 0} tests • ${_formatDate(session['completed_at'])}',
+                          ),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'Score: ${session['score'] ?? 'N/A'}',
+                              style: const TextStyle(
+                                color: Color(0xFF10B981),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          
+          // Generate Button
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _selectedSessionIds.isEmpty ? null : () {
+                  widget.onGenerate(_titleController.text, _selectedSessionIds.toList());
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1A1A1A),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: Text(
+                  'Generate Report (${_selectedSessionIds.length} sessions)',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  String _formatCategory(String? category) {
+    if (category == null) return 'Unknown';
+    return category[0].toUpperCase() + category.substring(1);
+  }
+  
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return '';
+    final date = DateTime.tryParse(dateStr);
+    if (date == null) return dateStr;
+    return '${date.day}/${date.month}/${date.year}';
+  }
 }

@@ -132,3 +132,30 @@ async def upload_profile_image(
     user = await service.update_profile_image(user_id, relative_path)
     
     return AuthUserResponse.model_validate(user)
+
+@router.delete("/profile-image", response_model=AuthUserResponse)
+async def delete_profile_image(
+    user_id: int = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete profile image.
+    - Removes file from storage
+    - Clears profile_image_path in DB
+    """
+    service = UserService(db)
+    user = await service.get_user(user_id)
+
+    # If no image, return same user
+    if not user.profile_image_path:
+        return AuthUserResponse.model_validate(user)
+
+    # Delete physical file (optional)
+    filepath = os.path.join(settings.UPLOAD_DIR, user.profile_image_path)
+    if os.path.exists(filepath):
+        os.remove(filepath)
+
+    # Clear DB field
+    updated = await service.update_profile_image(user_id, None)
+
+    return AuthUserResponse.model_validate(updated)

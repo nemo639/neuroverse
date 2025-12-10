@@ -203,95 +203,121 @@ void _showCompleteDialog() {
   }
 
   Widget _buildHeader() {
-    return _buildAnimatedWidget(
-      delay: 0.0,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          children: [
-            GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.pop(context);
-              },
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.black.withOpacity(0.08)),
-                ),
-                child: const Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 18,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Speech & Language',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black87,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const Text(
-                    'Assessment',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black87,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.schedule_rounded,
-                        size: 14,
-                        color: Colors.black.withOpacity(0.5),
+  return _buildAnimatedWidget(
+    delay: 0.0,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              if (_sessionId != null && completedCount == 0) {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    title: const Text('Exit Test?', style: TextStyle(fontWeight: FontWeight.w700)),
+                    content: const Text('You haven’t completed any tests yet. Progress will be lost.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text('Continue', style: TextStyle(color: Colors.black.withOpacity(0.5))),
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '10-12 minutes',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black.withOpacity(0.5),
-                        ),
+                      TextButton(
+                        onPressed: () async {
+                          await ApiService.cancelTestSession(sessionId: _sessionId!);
+                          Navigator.pop(ctx);
+                          if (mounted) Navigator.pop(context);
+                        },
+                        child: const Text('Exit', style: TextStyle(color: Color(0xFFEF4444))),
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            Container(
-              width: 50,
-              height: 50,
+                );
+              } else {
+                Navigator.pop(context);
+              }
+            },
+            child: Container(
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFFDBEAFE),
-                borderRadius: BorderRadius.circular(16),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black.withOpacity(0.08)),
               ),
               child: const Icon(
-                Icons.mic_rounded,
-                color: Color(0xFF3B82F6),
-                size: 26,
+                Icons.arrow_back_ios_new_rounded,
+                size: 18,
+                color: Colors.black87,
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Speech & Language',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black87,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const Text(
+                  'Assessment',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black87,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 14,
+                      color: Colors.black.withOpacity(0.5),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '10-12 minutes',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black.withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: const Color(0xFFDBEAFE),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.mic_rounded,
+              color: Color(0xFF3B82F6),
+              size: 26,
+            ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   Widget _buildAboutCard() {
     return _buildAnimatedWidget(

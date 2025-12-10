@@ -215,95 +215,118 @@ void _showCompleteDialog() {
   }
 
   Widget _buildHeader() {
-    return _buildAnimatedWidget(
-      delay: 0.0,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          children: [
-            GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.pop(context);
-              },
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.black.withOpacity(0.08)),
-                ),
-                child: const Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 18,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Cognitive & Memory',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black87,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const Text(
-                    'Assessment',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black87,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.schedule_rounded,
-                        size: 14,
-                        color: Colors.black.withOpacity(0.5),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '12-15 minutes',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black.withOpacity(0.5),
+  return _buildAnimatedWidget(
+    delay: 0.0,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () async {
+              HapticFeedback.lightImpact();
+
+              if (_sessionId != null) {
+                if (completedCount > 0) {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      title: const Text('Exit Test?', style: TextStyle(fontWeight: FontWeight.w700)),
+                      content: Text('You have completed $completedCount/$totalCount tests. Progress will be lost.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text('Continue', style: TextStyle(color: Colors.black.withOpacity(0.5))),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              width: 50,
-              height: 50,
+                        TextButton(
+                          onPressed: () async {
+                            await ApiService.cancelTestSession(sessionId: _sessionId!);
+                            Navigator.pop(ctx);
+                            if (mounted) Navigator.pop(context);
+                          },
+                          child: const Text('Exit', style: TextStyle(color: Color(0xFFEF4444))),
+                        ),
+                      ],
+                    ),
+                  );
+                } else {
+                  await ApiService.cancelTestSession(sessionId: _sessionId!);
+                  Navigator.pop(context);
+                }
+              } else {
+                Navigator.pop(context);
+              }
+            },
+            child: Container(
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFFF3E8FF),
-                borderRadius: BorderRadius.circular(16),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black.withOpacity(0.08)),
               ),
               child: const Icon(
-                Icons.psychology_rounded,
-                color: Color(0xFF8B5CF6),
-                size: 26,
+                Icons.close_rounded,
+                size: 20,
+                color: Colors.black87,
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Cognitive & Memory',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black87,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  'Assessment',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black87,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.schedule_rounded, size: 14, color: Colors.black54),
+                    SizedBox(width: 4),
+                    Text(
+                      '12-15 minutes',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: Color(0xFFF3E8FF),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.psychology_rounded,
+              color: Color(0xFF8B5CF6),
+              size: 26,
+            ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildAboutCard() {
     return _buildAnimatedWidget(

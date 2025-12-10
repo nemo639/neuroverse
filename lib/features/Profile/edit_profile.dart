@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:neuroverse/core/api_service.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -36,6 +38,9 @@ final TextEditingController _locationController = TextEditingController();
   static const Color blueAccent = Color(0xFF3B82F6);
   static const Color greenAccent = Color(0xFF10B981);
   static const Color redAccent = Color(0xFFEF4444);
+  File? _selectedImage;
+  String? _profileImagePath;
+
 
   @override
   void initState() {
@@ -64,6 +69,31 @@ final TextEditingController _locationController = TextEditingController();
       setState(() => _hasChanges = true);
     }
   }
+  Future<void> _pickImage(bool fromCamera) async {
+  final picker = ImagePicker();
+  final picked = await picker.pickImage(
+    source: fromCamera ? ImageSource.camera : ImageSource.gallery,
+    imageQuality: 80, // AUTO RESOLUTION COMPRESSION
+  );
+
+  if (picked != null) {
+    setState(() => _selectedImage = File(picked.path));
+
+    final result = await ApiService.uploadProfileImage(_selectedImage!);
+
+    if (mounted && result['success']) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Profile picture updated!")),
+      );
+      _loadUserData(); // Refresh UI
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result['error'] ?? "Upload failed")),
+      );
+    }
+  }
+}
+
 
   @override
   void dispose() {
@@ -77,13 +107,16 @@ final TextEditingController _locationController = TextEditingController();
 // Add this new method:
 Future<void> _loadUserData() async {
   final result = await ApiService.getUserProfile();
-
+ 
   if (mounted && result['success']) {
     final data = result['data'];
+    
+
     setState(() {
       _firstNameController.text = data['first_name'] ?? '';
       _lastNameController.text = data['last_name'] ?? '';
       _phoneController.text = data['phone'] ?? '';
+      _profileImagePath = data['profile_image_path'];
       _email = data['email'] ?? '';
       _gender = data['gender'] ?? '';
       
@@ -344,11 +377,12 @@ String _monthName(int month) {
               child: ClipOval(
                 child: Container(
                   color: softLavender,
-                  child: const Icon(
-                    Icons.person_rounded,
-                    size: 60,
-                    color: Colors.white,
-                  ),
+                 child: _selectedImage != null
+    ? Image.file(_selectedImage!, fit: BoxFit.cover)
+    : (_profileImagePath != null && _profileImagePath!.isNotEmpty
+        ? Image.network("${ApiService.baseUrl}/${_profileImagePath!}", fit: BoxFit.cover)
+        : const Icon(Icons.person_rounded, size: 60, color: Colors.white)),
+
                 ),
               ),
             ),
@@ -429,6 +463,7 @@ String _monthName(int month) {
                   onTap: () {
                     Navigator.pop(context);
                     // Open camera
+                     _pickImage(true);
                   },
                 ),
                 _buildImageOption(
@@ -438,15 +473,31 @@ String _monthName(int month) {
                   onTap: () {
                     Navigator.pop(context);
                     // Open gallery
+                    _pickImage(false);
                   },
                 ),
                 _buildImageOption(
                   icon: Icons.delete_rounded,
                   label: 'Remove',
                   color: redAccent,
-                  onTap: () {
+                  onTap: () async{
                     Navigator.pop(context);
                     // Remove photo
+                    final result = await ApiService.deleteProfileImage();
+
+  if (result["success"]) {
+    setState(() {
+      _selectedImage = null;
+      _profileImagePath = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Profile photo removed")),
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result["error"] ?? "Failed to delete photo")),
+    );
+  }
                   },
                 ),
               ],

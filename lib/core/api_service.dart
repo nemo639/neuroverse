@@ -8,7 +8,7 @@ class ApiService {
   // ============== BASE URL CONFIGURATION ==============
   // Automatically selects correct URL based on platform
   static String get baseUrl {
-  const backendIP = '10.10.17.228:8000';   // <---- YOUR WORKING IP
+  const backendIP = '10.10.16.81:8000';   // <---- YOUR WORKING IP
 
   if (kIsWeb) {
     // Flutter Web uses browser → needs direct IP
@@ -658,6 +658,49 @@ class ApiService {
       return {'success': false, 'error': 'Connection failed: $e'};
     }
   }
+
+  static Future<Map<String, dynamic>> uploadProfileImage(File file) async {
+  try {
+    final uri = Uri.parse('$baseUrl$apiVersion/users/profile-image');
+    final request = http.MultipartRequest('POST', uri);
+
+    request.headers['Authorization'] = 'Bearer $_accessToken';
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'file',    // IMPORTANT → Must match backend name
+        file.path,
+      ),
+    );
+
+    final response = await request.send();
+    final responseBody = await response.stream.bytesToString();
+    final data = jsonDecode(responseBody);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    } else {
+      return {'success': false, 'error': data['detail'] ?? 'Upload failed'};
+    }
+  } catch (e) {
+    return {'success': false, 'error': 'Upload error: $e'};
+  }
+}
+
+  static Future<Map<String, dynamic>> deleteProfileImage() async {
+  final token = _accessToken;
+
+  final url = Uri.parse("$baseUrl/users/profile-image");
+
+  final response = await http.delete(
+    url,
+    headers: {
+      "Authorization": "Bearer $token",
+    },
+  );
+
+  return _handleResponse(response);
+}
 
   // ============== HEALTH CHECK ==============
 
