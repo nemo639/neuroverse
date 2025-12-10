@@ -77,9 +77,10 @@ final TextEditingController _locationController = TextEditingController();
   );
 
   if (picked != null) {
-    setState(() => _selectedImage = File(picked.path));
-
-    final result = await ApiService.uploadProfileImage(_selectedImage!);
+    // Read bytes from picked image (works on web and mobile)
+    final bytes = await picked.readAsBytes();
+    
+    final result = await ApiService.uploadProfileImage(bytes, picked.name);
 
     if (mounted && result['success']) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -483,7 +484,7 @@ String _monthName(int month) {
                   onTap: () async{
                     Navigator.pop(context);
                     // Remove photo
-                    final result = await ApiService.deleteProfileImage();
+                    final result = await ApiService.removeProfileImage();
 
   if (result["success"]) {
     setState(() {

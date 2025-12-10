@@ -190,7 +190,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 color: Colors.black87,
               ),
             ),
-            // Empty container for balance (removed ... button)
             const SizedBox(width: 44, height: 44),
           ],
         ),
@@ -203,6 +202,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     final lastName = _userData?['last_name'] ?? '';
     final email = _userData?['email'] ?? 'user@email.com';
     final initial = firstName.isNotEmpty ? firstName[0].toUpperCase() : 'U';
+    final profileImagePath = _userData?['profile_image_path'];
 
     return _buildAnimatedWidget(
       delay: 0.1,
@@ -226,11 +226,22 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(28),
-                  child: (_userData?['profile_image_path'] != null &&
-                          _userData!['profile_image_path'].toString().isNotEmpty)
+                  child: (profileImagePath != null && profileImagePath.toString().isNotEmpty)
                       ? Image.network(
-                          "${ApiService.baseUrl}/${_userData!['profile_image_path']}",
+                          "${ApiService.baseUrl}/$profileImagePath",
                           fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Center(
+                              child: Text(
+                                initial,
+                                style: const TextStyle(
+                                  fontSize: 42,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            );
+                          },
                         )
                       : Center(
                           child: Text(
@@ -471,7 +482,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               ),
               const SizedBox(height: 18),
               GestureDetector(
-                onTap: () => HapticFeedback.lightImpact(),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const PremiumSubscriptionScreen()),
+                  );
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                   decoration: BoxDecoration(
@@ -578,7 +595,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
+        height: MediaQuery.of(context).size.height * 0.55,
         padding: const EdgeInsets.all(24),
         decoration: const BoxDecoration(
           color: Colors.white,
@@ -610,11 +627,28 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             Expanded(
               child: ListView(
                 children: [
-                  _buildPrivacyOption(Icons.fingerprint_rounded, 'Biometric Login', 'Use fingerprint or face ID'),
-                  _buildPrivacyOption(Icons.lock_outline_rounded, 'Change Password', 'Update your password'),
-                  _buildPrivacyOption(Icons.visibility_off_outlined, 'Data Visibility', 'Control who sees your data'),
-                  _buildPrivacyOption(Icons.delete_outline_rounded, 'Delete Account', 'Permanently remove your data'),
-                  _buildPrivacyOption(Icons.download_outlined, 'Export Data', 'Download your health data'),
+                  _buildPrivacyOptionWithAction(
+                    Icons.fingerprint_rounded, 
+                    'Biometric Login', 
+                    'Use fingerprint or face ID',
+                    onTap: () => _showComingSoonDialog('Biometric Login'),
+                  ),
+                  _buildPrivacyOptionWithAction(
+                    Icons.lock_outline_rounded, 
+                    'Change Password', 
+                    'Update your password',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/change-password');
+                    },
+                  ),
+                  _buildPrivacyOptionWithAction(
+                    Icons.delete_outline_rounded, 
+                    'Delete Account', 
+                    'Permanently remove your data',
+                    onTap: () => _showDeleteAccountDialog(),
+                    isDestructive: true,
+                  ),
                 ],
               ),
             ),
@@ -624,14 +658,17 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildPrivacyOption(IconData icon, String title, String subtitle) {
+  Widget _buildPrivacyOptionWithAction(IconData icon, String title, String subtitle, {required VoidCallback onTap, bool isDestructive = false}) {
     return GestureDetector(
-      onTap: () => HapticFeedback.lightImpact(),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: bgColor,
+          color: isDestructive ? const Color(0xFFFEE2E2) : bgColor,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -640,10 +677,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDestructive ? Colors.white : Colors.white,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, size: 22, color: Colors.black54),
+              child: Icon(icon, size: 22, color: isDestructive ? const Color(0xFFDC2626) : Colors.black54),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -652,24 +689,198 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      color: isDestructive ? const Color(0xFFDC2626) : Colors.black87,
                     ),
                   ),
                   Text(
                     subtitle,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.black.withOpacity(0.5),
+                      color: isDestructive ? const Color(0xFFDC2626).withOpacity(0.7) : Colors.black.withOpacity(0.5),
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: Colors.black.withOpacity(0.3)),
+            Icon(Icons.chevron_right_rounded, color: isDestructive ? const Color(0xFFDC2626).withOpacity(0.5) : Colors.black.withOpacity(0.3)),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showComingSoonDialog(String feature) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  color: softYellow,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.schedule_rounded,
+                  color: Color(0xFFF59E0B),
+                  size: 36,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Coming Soon!',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '$feature will be available in the next update. Stay tuned!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.black.withOpacity(0.6),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: darkCard,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Got it!',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteAccountDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.warning_amber_rounded,
+                  color: Color(0xFFDC2626),
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Delete Account?',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'This action cannot be undone. All your data, test results, and reports will be permanently deleted.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.black.withOpacity(0.6),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pop(context);
+                        // TODO: Call delete account API
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Delete',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -681,72 +892,75 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.55,
+        height: MediaQuery.of(context).size.height * 0.52,
         padding: const EdgeInsets.all(24),
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(2),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Help & Support',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: Colors.black87,
+              const SizedBox(height: 20),
+              const Text(
+                'Help & Support',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black87,
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            _buildHelpOption(
-              Icons.quiz_outlined, 
-              'FAQs', 
-              'Common questions answered',
-              onTap: () {
-                Navigator.pop(context);
-                _navigateToFAQs();
-              },
-            ),
-            _buildHelpOption(
-              Icons.support_agent_rounded, 
-              'Contact Support', 
-              'Get help from our team',
-              onTap: () {
-                Navigator.pop(context);
-                _navigateToContactSupport();
-              },
-            ),
-            _buildHelpOption(
-              Icons.menu_book_rounded, 
-              'User Guide', 
-              'Learn how to use the app',
-              onTap: () {
-                Navigator.pop(context);
-                _navigateToUserGuide();
-              },
-            ),
-            _buildHelpOption(
-              Icons.feedback_outlined, 
-              'Submit Feedback', 
-              'Help us improve the app',
-              onTap: () {
-                Navigator.pop(context);
-                _navigateToSubmitFeedback();
-              },
-            ),
-          ],
+              const SizedBox(height: 24),
+              _buildHelpOption(
+                Icons.quiz_outlined, 
+                'FAQs', 
+                'Common questions answered',
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const FAQsScreen()));
+                },
+              ),
+              _buildHelpOption(
+                Icons.support_agent_rounded, 
+                'Contact Support', 
+                'Get help from our team',
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const ContactSupportScreen()));
+                },
+              ),
+              _buildHelpOption(
+                Icons.menu_book_rounded, 
+                'User Guide', 
+                'Learn how to use the app',
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const UserGuideScreen()));
+                },
+              ),
+              _buildHelpOption(
+                Icons.feedback_outlined, 
+                'Submit Feedback', 
+                'Help us improve the app',
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const SubmitFeedbackScreen()));
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
@@ -806,38 +1020,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  // Navigate to FAQs Screen
-  void _navigateToFAQs() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const FAQsScreen()),
-    );
-  }
-
-  // Navigate to Contact Support Screen
-  void _navigateToContactSupport() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ContactSupportScreen()),
-    );
-  }
-
-  // Navigate to User Guide Screen
-  void _navigateToUserGuide() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const UserGuideScreen()),
-    );
-  }
-
-  // Navigate to Submit Feedback Screen
-  void _navigateToSubmitFeedback() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const SubmitFeedbackScreen()),
-    );
-  }
-
   void _showTermsDialog() {
     showDialog(
       context: context,
@@ -883,27 +1065,27 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     children: [
                       _buildTermsSection(
                         '1. Medical Disclaimer',
-                        'NeuroVerse is a screening tool designed to assist in early detection of neurological conditions. This app does NOT provide medical diagnosis. Results should be reviewed by qualified healthcare professionals. Never disregard professional medical advice based on app results.',
+                        'NeuroVerse is a screening tool designed to assist in early detection of neurological conditions. This app does NOT provide medical diagnosis. Results should be reviewed by qualified healthcare professionals.',
                       ),
                       _buildTermsSection(
                         '2. Data Collection & Usage',
-                        'We collect neurological assessment data including speech patterns, motor function measurements, cognitive test results, and digital wellness metrics. This data is encrypted using AES-256 encryption and stored securely on HIPAA-compliant servers.',
+                        'We collect neurological assessment data including speech patterns, motor function measurements, cognitive test results, and digital wellness metrics. This data is encrypted using AES-256 encryption.',
                       ),
                       _buildTermsSection(
                         '3. AI & Machine Learning',
-                        'Our AI models analyze your assessment data to generate risk scores. These models are trained on anonymized clinical data and are continuously improved. AI predictions have accuracy limitations and should not replace clinical evaluation.',
+                        'Our AI models analyze your assessment data to generate risk scores. These models are trained on anonymized clinical data and are continuously improved.',
                       ),
                       _buildTermsSection(
                         '4. Research Participation',
-                        'Anonymized data may be used for neurodegenerative disease research to improve detection algorithms. You can opt-out of research participation in Privacy Settings without affecting app functionality.',
+                        'Anonymized data may be used for neurodegenerative disease research to improve detection algorithms. You can opt-out in Privacy Settings.',
                       ),
                       _buildTermsSection(
                         '5. User Responsibilities',
-                        'You agree to provide accurate information, complete assessments as instructed, and use the app for its intended purpose. Misuse of the app or manipulation of results is prohibited.',
+                        'You agree to provide accurate information, complete assessments as instructed, and use the app for its intended purpose.',
                       ),
                       _buildTermsSection(
                         '6. Limitation of Liability',
-                        'NeuroVerse and its developers are not liable for any decisions made based on app results. The app is provided "as is" without warranties of any kind.',
+                        'NeuroVerse and its developers are not liable for any decisions made based on app results. The app is provided "as is" without warranties.',
                       ),
                     ],
                   ),
@@ -983,27 +1165,27 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     children: [
                       _buildTermsSection(
                         '1. Information We Collect',
-                        '• Personal Information: Name, email, phone, date of birth\n• Health Data: Assessment results, risk scores, test recordings\n• Device Data: Device type, OS version, app usage analytics\n• Digital Wellness: Screen time (with permission)',
+                        '• Personal Information: Name, email, phone\n• Health Data: Assessment results, risk scores\n• Device Data: Device type, OS version',
                       ),
                       _buildTermsSection(
                         '2. How We Use Your Data',
-                        '• Generate personalized health risk assessments\n• Improve AI detection algorithms\n• Send important health notifications\n• Provide customer support\n• Conduct anonymized medical research',
+                        '• Generate personalized health assessments\n• Improve AI detection algorithms\n• Send important notifications',
                       ),
                       _buildTermsSection(
                         '3. Data Storage & Security',
-                        'All data is encrypted in transit (TLS 1.3) and at rest (AES-256). We use HIPAA-compliant cloud infrastructure. Data is stored for the duration of your account unless deletion is requested.',
+                        'All data is encrypted in transit (TLS 1.3) and at rest (AES-256). We use HIPAA-compliant cloud infrastructure.',
                       ),
                       _buildTermsSection(
                         '4. Data Sharing',
-                        'We do NOT sell your personal data. Data may be shared with:\n• Healthcare providers (with your consent)\n• Research institutions (anonymized only)\n• Legal authorities (when required by law)',
+                        'We do NOT sell your personal data. Data may be shared with healthcare providers (with consent) and research institutions (anonymized).',
                       ),
                       _buildTermsSection(
                         '5. Your Rights',
-                        '• Access your data anytime\n• Request data deletion\n• Export your health records\n• Opt-out of research participation\n• Update or correct your information',
+                        '• Access your data anytime\n• Request data deletion\n• Opt-out of research participation',
                       ),
                       _buildTermsSection(
                         '6. Contact Us',
-                        'For privacy concerns or data requests:\nEmail: privacy@neuroverse.pk\nPhone: +92 300 1234567',
+                        'For privacy concerns:\nEmail: privacy@neuroverse.pk',
                       ),
                     ],
                   ),
@@ -1158,9 +1340,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        if (onTap != null) {
-          onTap();
-        }
+        if (onTap != null) onTap();
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1369,6 +1549,713 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 }
 
+// ==================== Premium Subscription Screen ====================
+class PremiumSubscriptionScreen extends StatefulWidget {
+  const PremiumSubscriptionScreen({super.key});
+
+  @override
+  State<PremiumSubscriptionScreen> createState() => _PremiumSubscriptionScreenState();
+}
+
+class _PremiumSubscriptionScreenState extends State<PremiumSubscriptionScreen> {
+  static const Color bgColor = Color(0xFFF7F7F7);
+  static const Color darkCard = Color(0xFF1A1A1A);
+  static const Color blueAccent = Color(0xFF3B82F6);
+  static const Color mintGreen = Color(0xFFB8E8D1);
+  static const Color softLavender = Color(0xFFE8DFF0);
+
+  final TextEditingController _cardNumberController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _expiryController = TextEditingController();
+  final TextEditingController _cvvController = TextEditingController();
+
+  String _cardType = 'unknown';
+  int _selectedPlan = 1; // 0 = monthly, 1 = yearly
+
+  @override
+  void dispose() {
+    _cardNumberController.dispose();
+    _nameController.dispose();
+    _expiryController.dispose();
+    _cvvController.dispose();
+    super.dispose();
+  }
+
+  String _detectCardType(String number) {
+    final cleanNumber = number.replaceAll(' ', '');
+    if (cleanNumber.isEmpty) return 'unknown';
+    
+    if (cleanNumber.startsWith('4')) {
+      return 'visa';
+    } else if (cleanNumber.startsWith('5') || cleanNumber.startsWith('2')) {
+      if (cleanNumber.length >= 2) {
+        final prefix = int.tryParse(cleanNumber.substring(0, 2)) ?? 0;
+        if ((prefix >= 51 && prefix <= 55) || (prefix >= 22 && prefix <= 27)) {
+          return 'mastercard';
+        }
+      }
+      return 'mastercard';
+    } else if (cleanNumber.startsWith('3')) {
+      if (cleanNumber.length >= 2) {
+        final prefix = cleanNumber.substring(0, 2);
+        if (prefix == '34' || prefix == '37') {
+          return 'amex';
+        }
+      }
+    } else if (cleanNumber.startsWith('6')) {
+      return 'discover';
+    }
+    return 'unknown';
+  }
+
+  Widget _getCardIcon() {
+    switch (_cardType) {
+      case 'visa':
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1F71),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Text(
+            'VISA',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        );
+      case 'mastercard':
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEB001B),
+                shape: BoxShape.circle,
+              ),
+            ),
+            Transform.translate(
+              offset: const Offset(-8, 0),
+              child: Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF79E1B).withOpacity(0.9),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ],
+        );
+      case 'amex':
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF006FCF),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Text(
+            'AMEX',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 10,
+            ),
+          ),
+        );
+      case 'discover':
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF6600),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Text(
+            'DISCOVER',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 8,
+            ),
+          ),
+        );
+      default:
+        return Icon(Icons.credit_card_rounded, color: Colors.black.withOpacity(0.3));
+    }
+  }
+
+  String _formatCardNumber(String value) {
+    final cleanValue = value.replaceAll(' ', '');
+    final buffer = StringBuffer();
+    for (int i = 0; i < cleanValue.length; i++) {
+      if (i > 0 && i % 4 == 0) {
+        buffer.write(' ');
+      }
+      buffer.write(cleanValue[i]);
+    }
+    return buffer.toString();
+  }
+
+  void _showPurchaseDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: mintGreen,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: const Icon(
+                  Icons.favorite_rounded,
+                  color: Colors.black87,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Thank You! 🙏',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Please pray for us and our project!\n\nWe are working hard to bring you the best experience. Premium features will be launching in the coming months.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.black.withOpacity(0.6),
+                  height: 1.6,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: softLavender.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.rocket_launch_rounded, color: Color(0xFF8B5CF6)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Stay tuned for updates!',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black.withOpacity(0.7),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: darkCard,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Got it!',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(),
+              
+              // Premium Card Preview
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Container(
+                  width: double.infinity,
+                  height: 200,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF1A1A1A),
+                        Color(0xFF2D2D2D),
+                        Color(0xFF1A1A1A),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: darkCard.withOpacity(0.4),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: mintGreen,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.workspace_premium_rounded, size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'NEUROVERSE',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                            ],
+                          ),
+                          _cardType != 'unknown' ? _getCardIcon() : const SizedBox(),
+                        ],
+                      ),
+                      Text(
+                        _cardNumberController.text.isEmpty 
+                            ? '•••• •••• •••• ••••' 
+                            : _cardNumberController.text,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 3,
+                        ),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'CARD HOLDER',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.5),
+                                  fontSize: 10,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _nameController.text.isEmpty 
+                                    ? 'YOUR NAME' 
+                                    : _nameController.text.toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'EXPIRES',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.5),
+                                  fontSize: 10,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _expiryController.text.isEmpty 
+                                    ? 'MM/YY' 
+                                    : _expiryController.text,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Plan Selection
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Expanded(child: _buildPlanCard(0, 'Monthly', '\$9.99', '/month')),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildPlanCard(1, 'Yearly', '\$79.99', '/year', savings: 'Save 33%')),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Card Details Form
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Payment Details',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildInputField(
+                      controller: _nameController,
+                      label: 'Cardholder Name',
+                      hint: 'Enter your name',
+                      icon: Icons.person_outline_rounded,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildCardNumberField(),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildInputField(
+                            controller: _expiryController,
+                            label: 'Expiry Date',
+                            hint: 'MM/YY',
+                            icon: Icons.calendar_today_rounded,
+                            keyboardType: TextInputType.number,
+                            maxLength: 5,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: _buildInputField(
+                            controller: _cvvController,
+                            label: 'CVV',
+                            hint: '•••',
+                            icon: Icons.lock_outline_rounded,
+                            keyboardType: TextInputType.number,
+                            maxLength: 4,
+                            obscure: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+
+              // Purchase Button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    _showPurchaseDialog();
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF3B82F6), Color(0xFF8B5CF6)],
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: blueAccent.withOpacity(0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.lock_rounded, color: Colors.white, size: 20),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Purchase ${_selectedPlan == 0 ? 'Monthly' : 'Yearly'} Plan',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Security Note
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.verified_user_rounded, size: 16, color: Colors.black.withOpacity(0.4)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Secured by 256-bit SSL encryption',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black.withOpacity(0.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              Navigator.pop(context);
+            },
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black.withOpacity(0.08)),
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 18,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Text(
+            'Premium Subscription',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlanCard(int index, String title, String price, String period, {String? savings}) {
+    final isSelected = _selectedPlan == index;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() => _selectedPlan = index);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? blueAccent.withOpacity(0.1) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected ? blueAccent : Colors.black.withOpacity(0.08),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            if (savings != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  savings,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isSelected ? blueAccent : Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              price,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: isSelected ? blueAccent : Colors.black87,
+              ),
+            ),
+            Text(
+              period,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black.withOpacity(0.5),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardNumberField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.08)),
+      ),
+      child: TextField(
+        controller: _cardNumberController,
+        keyboardType: TextInputType.number,
+        maxLength: 19,
+        onChanged: (value) {
+          final formatted = _formatCardNumber(value.replaceAll(' ', ''));
+          if (formatted != value) {
+            _cardNumberController.value = TextEditingValue(
+              text: formatted,
+              selection: TextSelection.collapsed(offset: formatted.length),
+            );
+          }
+          setState(() {
+            _cardType = _detectCardType(value);
+          });
+        },
+        decoration: InputDecoration(
+          labelText: 'Card Number',
+          hintText: '1234 5678 9012 3456',
+          counterText: '',
+          prefixIcon: const Icon(Icons.credit_card_rounded, color: Colors.black38),
+          suffixIcon: Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: _getCardIcon(),
+          ),
+          suffixIconConstraints: const BoxConstraints(minWidth: 60),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.all(16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInputField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    int? maxLength,
+    bool obscure = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.08)),
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        maxLength: maxLength,
+        obscureText: obscure,
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          counterText: '',
+          prefixIcon: Icon(icon, color: Colors.black38),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.all(16),
+        ),
+      ),
+    );
+  }
+}
+
 // ==================== FAQs Screen ====================
 class FAQsScreen extends StatefulWidget {
   const FAQsScreen({super.key});
@@ -1410,7 +2297,7 @@ class _FAQsScreenState extends State<FAQsScreen> {
     },
     {
       'question': 'Can I delete my data?',
-      'answer': 'Yes, you can request complete data deletion anytime from Privacy & Security settings. Once requested, all your personal data and test results will be permanently removed within 30 days.'
+      'answer': 'Yes, you can request complete data deletion anytime from Privacy & Security settings. Once requested, all your personal data and test results will be permanently deleted within 30 days.'
     },
     {
       'question': 'What is XAI (Explainable AI)?',
@@ -1657,7 +2544,6 @@ class ContactSupportScreen extends StatelessWidget {
               _buildHeader(context),
               const SizedBox(height: 10),
               
-              // General Support Section
               _buildSectionTitle('General Support'),
               _buildContactCard(
                 context,
@@ -1669,7 +2555,6 @@ class ContactSupportScreen extends StatelessWidget {
                 description: 'For general questions, account issues, subscription queries, and basic app support.',
               ),
               
-              // Technical Support Section
               _buildSectionTitle('Technical Support'),
               _buildContactCard(
                 context,
@@ -1690,7 +2575,6 @@ class ContactSupportScreen extends StatelessWidget {
                 description: 'For app crashes, UI/UX issues, test recording problems, and mobile app bugs.',
               ),
               
-              // Other Issues Section
               _buildSectionTitle('Other Issues'),
               _buildContactCard(
                 context,
@@ -1702,7 +2586,6 @@ class ContactSupportScreen extends StatelessWidget {
                 description: 'For partnership inquiries, feedback escalation, account recovery, and non-technical concerns.',
               ),
               
-              // Response Time Notice
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Container(
@@ -1742,7 +2625,7 @@ class ContactSupportScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'We typically respond within 24-48 hours during business days. Urgent issues are prioritized.',
+                              'We typically respond within 24-48 hours during business days.',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.black.withOpacity(0.6),
@@ -1897,7 +2780,6 @@ class ContactSupportScreen extends StatelessWidget {
             GestureDetector(
               onTap: () {
                 HapticFeedback.lightImpact();
-                // Copy email to clipboard
                 Clipboard.setData(ClipboardData(text: email));
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -1947,262 +2829,192 @@ class UserGuideScreen extends StatelessWidget {
   const UserGuideScreen({super.key});
 
   static const Color bgColor = Color(0xFFF7F7F7);
-  static const Color darkCard = Color(0xFF1A1A1A);
-  static const Color blueAccent = Color(0xFF3B82F6);
-  static const Color mintGreen = Color(0xFFB8E8D1);
-  static const Color softLavender = Color(0xFFE8DFF0);
-  static const Color creamBeige = Color(0xFFF5EBE0);
-  static const Color softYellow = Color(0xFFFFF3CD);
-
-  final List<Map<String, dynamic>> _guides = const [
-    {
-      'icon': Icons.home_rounded,
-      'title': 'Dashboard Overview',
-      'color': Color(0xFF3B82F6),
-      'steps': [
-        'View your overall health risk score at the top',
-        'Check individual category scores (Speech, Motor, Cognitive, Gait)',
-        'See your recent test history',
-        'Track your daily streak and wellness metrics',
-        'Quick access to start new tests',
-      ],
-    },
-    {
-      'icon': Icons.mic_rounded,
-      'title': 'Taking Speech Tests',
-      'color': Color(0xFF10B981),
-      'steps': [
-        'Find a quiet environment with minimal background noise',
-        'Hold your phone 6-8 inches from your mouth',
-        'Speak clearly at your normal pace',
-        'Follow on-screen prompts (reading passages, sustained vowels)',
-        'Wait for the recording indicator before speaking',
-        'Review and retry if the recording quality is poor',
-      ],
-    },
-    {
-      'icon': Icons.touch_app_rounded,
-      'title': 'Motor Function Tests',
-      'color': Color(0xFF8B5CF6),
-      'steps': [
-        'Sit comfortably with your phone on a stable surface',
-        'For tapping tests: Tap alternating buttons as fast as possible',
-        'For spiral drawing: Start from center, draw smoothly',
-        'Keep your wrist steady, move only fingers',
-        'Complete all trials for accurate results',
-      ],
-    },
-    {
-      'icon': Icons.psychology_rounded,
-      'title': 'Cognitive Assessments',
-      'color': Color(0xFFF97316),
-      'steps': [
-        'Take tests when you\'re alert and focused',
-        'Read instructions carefully before starting',
-        'For memory tests: Pay attention during the learning phase',
-        'For pattern tests: Look for visual/logical sequences',
-        'Don\'t rush - accuracy matters more than speed',
-      ],
-    },
-    {
-      'icon': Icons.directions_walk_rounded,
-      'title': 'Gait Analysis Tests',
-      'color': Color(0xFFEF4444),
-      'steps': [
-        'Place phone in front pocket or hold at waist level',
-        'Walk in a clear, straight path (10+ meters ideal)',
-        'Walk at your normal comfortable pace',
-        'Avoid holding onto objects while walking',
-        'Complete multiple walking trials as prompted',
-      ],
-    },
-    {
-      'icon': Icons.auto_awesome_rounded,
-      'title': 'Understanding XAI Results',
-      'color': Color(0xFF6366F1),
-      'steps': [
-        'XAI shows which factors influenced your score',
-        'Green indicators = positive contributions',
-        'Red indicators = areas of concern',
-        'Review feature importance charts',
-        'Use insights to discuss with your doctor',
-      ],
-    },
-    {
-      'icon': Icons.analytics_rounded,
-      'title': 'Viewing Reports',
-      'color': Color(0xFF0EA5E9),
-      'steps': [
-        'Access detailed reports from Reports tab',
-        'View trend graphs showing progress over time',
-        'Export PDF reports for healthcare providers',
-        'Compare results across different test dates',
-        'Set up weekly/monthly report reminders',
-      ],
-    },
-    {
-      'icon': Icons.spa_rounded,
-      'title': 'Digital Wellness Tracking',
-      'color': Color(0xFF14B8A6),
-      'steps': [
-        'Grant screen time access for accurate tracking',
-        'Set daily goals for screen time, sleep, and activity',
-        'Log your sleep duration and quality daily',
-        'Track physical activity and steps',
-        'Review weekly patterns and insights',
-      ],
-    },
-  ];
 
   @override
   Widget build(BuildContext context) {
+    final guides = [
+      {
+        'icon': Icons.home_rounded,
+        'title': 'Dashboard Overview',
+        'color': const Color(0xFF3B82F6),
+        'steps': [
+          'View your overall health risk score at the top',
+          'Check individual category scores',
+          'See your recent test history',
+          'Track your daily streak and wellness metrics',
+        ],
+      },
+      {
+        'icon': Icons.mic_rounded,
+        'title': 'Taking Speech Tests',
+        'color': const Color(0xFF10B981),
+        'steps': [
+          'Find a quiet environment',
+          'Hold phone 6-8 inches from mouth',
+          'Speak clearly at normal pace',
+          'Follow on-screen prompts',
+        ],
+      },
+      {
+        'icon': Icons.touch_app_rounded,
+        'title': 'Motor Function Tests',
+        'color': const Color(0xFF8B5CF6),
+        'steps': [
+          'Sit comfortably with stable surface',
+          'Tap alternating buttons quickly',
+          'Draw spirals smoothly from center',
+          'Keep wrist steady',
+        ],
+      },
+      {
+        'icon': Icons.psychology_rounded,
+        'title': 'Cognitive Tests',
+        'color': const Color(0xFFF97316),
+        'steps': [
+          'Take tests when alert and focused',
+          'Read instructions carefully',
+          'Pay attention during learning phase',
+          'Don\'t rush - accuracy matters',
+        ],
+      },
+      {
+        'icon': Icons.directions_walk_rounded,
+        'title': 'Gait Analysis',
+        'color': const Color(0xFFEF4444),
+        'steps': [
+          'Place phone in pocket or hold at waist',
+          'Walk in clear straight path',
+          'Walk at normal comfortable pace',
+          'Avoid holding objects while walking',
+        ],
+      },
+      {
+        'icon': Icons.auto_awesome_rounded,
+        'title': 'Understanding XAI',
+        'color': const Color(0xFF6366F1),
+        'steps': [
+          'XAI shows factors influencing score',
+          'Green = positive contributions',
+          'Red = areas of concern',
+          'Use insights for doctor discussions',
+        ],
+      },
+    ];
+
     return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(context),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.black.withOpacity(0.08)),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Text(
+                    'User Guide',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-                itemCount: _guides.length,
-                itemBuilder: (context, index) => _buildGuideCard(_guides[index]),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              Navigator.pop(context);
-            },
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.black.withOpacity(0.08)),
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                size: 18,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          const Text(
-            'User Guide',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Colors.black87,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGuideCard(Map<String, dynamic> guide) {
-    final color = guide['color'] as Color;
-    final steps = guide['steps'] as List<String>;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Theme(
-        data: ThemeData().copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          leading: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(guide['icon'] as IconData, size: 24, color: color),
-          ),
-          title: Text(
-            guide['title'] as String,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: Colors.black87,
-            ),
-          ),
-          iconColor: Colors.black38,
-          collapsedIconColor: Colors.black38,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Column(
-                children: steps.asMap().entries.map((entry) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 24,
-                          height: 24,
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                itemCount: guides.length,
+                itemBuilder: (context, index) {
+                  final guide = guides[index];
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.black.withOpacity(0.06)),
+                    ),
+                    child: Theme(
+                      data: ThemeData().copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        leading: Container(
+                          width: 44,
+                          height: 44,
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
+                            color: (guide['color'] as Color).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Center(
-                            child: Text(
-                              '${entry.key + 1}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: color,
-                              ),
+                          child: Icon(guide['icon'] as IconData, color: guide['color'] as Color),
+                        ),
+                        title: Text(
+                          guide['title'] as String,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: (guide['color'] as Color).withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: (guide['steps'] as List<String>).asMap().entries.map((e) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: 22,
+                                        height: 22,
+                                        decoration: BoxDecoration(
+                                          color: (guide['color'] as Color).withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            '${e.key + 1}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: guide['color'] as Color,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          e.value,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.black.withOpacity(0.7),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            entry.value,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.black.withOpacity(0.7),
-                              height: 1.5,
-                            ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   );
-                }).toList(),
+                },
               ),
             ),
           ],
@@ -2220,31 +3032,141 @@ class SubmitFeedbackScreen extends StatefulWidget {
   State<SubmitFeedbackScreen> createState() => _SubmitFeedbackScreenState();
 }
 
-class _SubmitFeedbackScreenState extends State<SubmitFeedbackScreen> {
+class _SubmitFeedbackScreenState extends State<SubmitFeedbackScreen> with SingleTickerProviderStateMixin {
   static const Color bgColor = Color(0xFFF7F7F7);
   static const Color darkCard = Color(0xFF1A1A1A);
   static const Color blueAccent = Color(0xFF3B82F6);
   static const Color mintGreen = Color(0xFFB8E8D1);
+  static const Color softLavender = Color(0xFFE8DFF0);
 
+  late TabController _tabController;
+  
+  // Submit tab state
   final TextEditingController _feedbackController = TextEditingController();
   String _selectedCategory = 'General';
   int _rating = 0;
   bool _isSubmitting = false;
 
+  // History tab state
+  List<Map<String, dynamic>> _feedbackHistory = [];
+  bool _isLoadingHistory = true;
+  int _currentPage = 1;
+  int _totalPages = 1;
+
+  // ✅ UPDATED: Added 'Test Quality' to match your SQL schema
   final List<String> _categories = [
-    'General',
-    'Bug Report',
-    'Feature Request',
-    'UI/UX Improvement',
-    'Test Quality',
-    'Performance Issue',
-    'Other',
+    'General', 
+    'Bug Report', 
+    'Feature Request', 
+    'UI/UX', 
+    'Test Quality',  // ← ADDED THIS
+    'Performance', 
+    'Other'
   ];
+
+  // ✅ UPDATED: Added test_quality mapping
+  final Map<String, String> _categoryMap = {
+    'General': 'general',
+    'Bug Report': 'bug_report',
+    'Feature Request': 'feature_request',
+    'UI/UX': 'ui_ux',
+    'Test Quality': 'test_quality',  // ← ADDED THIS
+    'Performance': 'performance',
+    'Other': 'other',
+  };
+
+  // ✅ UPDATED: Added test_quality reverse mapping
+  final Map<String, String> _reverseCategoryMap = {
+    'general': 'General',
+    'bug_report': 'Bug Report',
+    'feature_request': 'Feature Request',
+    'ui_ux': 'UI/UX',
+    'test_quality': 'Test Quality',  // ← ADDED THIS
+    'performance': 'Performance',
+    'other': 'Other',
+  };
+
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.index == 1 && _feedbackHistory.isEmpty) {
+        _loadFeedbackHistory();
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _feedbackController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadFeedbackHistory() async {
+    setState(() => _isLoadingHistory = true);
+
+    final result = await ApiService.getMyFeedbacks(page: _currentPage, perPage: 10);
+
+    if (mounted) {
+      setState(() {
+        _isLoadingHistory = false;
+        if (result['success'] && result['data'] != null) {
+          final data = result['data'];
+          _feedbackHistory = List<Map<String, dynamic>>.from(data['feedbacks'] ?? []);
+          _totalPages = data['total_pages'] ?? 1;
+        }
+      });
+    }
+  }
+
+  Future<void> _deleteFeedback(int feedbackId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete Feedback?', style: TextStyle(fontWeight: FontWeight.w700)),
+        content: const Text('This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: TextStyle(color: Colors.black.withOpacity(0.5))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final result = await ApiService.deleteFeedback(feedbackId: feedbackId);
+      if (mounted) {
+        if (result['success']) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Feedback deleted'),
+              backgroundColor: const Color(0xFF10B981),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+          _loadFeedbackHistory();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['error'] ?? 'Failed to delete'),
+              backgroundColor: Colors.red[400],
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
+      }
+    }
   }
 
   void _submitFeedback() async {
@@ -2262,28 +3184,48 @@ class _SubmitFeedbackScreenState extends State<SubmitFeedbackScreen> {
 
     setState(() => _isSubmitting = true);
 
-    // TODO: Connect to backend API
-    // await ApiService.submitFeedback({
-    //   'category': _selectedCategory,
-    //   'rating': _rating,
-    //   'message': _feedbackController.text.trim(),
-    // });
+    final result = await ApiService.submitFeedback(
+      category: _categoryMap[_selectedCategory] ?? 'general',
+      message: _feedbackController.text.trim(),
+      rating: _rating > 0 ? _rating : null,
+      appVersion: '1.0.0',
+    );
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 1));
-    
     setState(() => _isSubmitting = false);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Thank you for your feedback!'),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-      Navigator.pop(context);
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Thank you for your feedback!'),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        // Clear form
+        _feedbackController.clear();
+        setState(() {
+          _rating = 0;
+          _selectedCategory = 'General';
+        });
+        // Refresh history if already loaded
+        if (_feedbackHistory.isNotEmpty) {
+          _loadFeedbackHistory();
+        }
+        // Switch to history tab
+        _tabController.animateTo(1);
+        _loadFeedbackHistory();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Failed to submit feedback'),
+            backgroundColor: Colors.red[400],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
     }
   }
 
@@ -2292,78 +3234,195 @@ class _SubmitFeedbackScreenState extends State<SubmitFeedbackScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Rating Section
-                    _buildSectionLabel('How would you rate your experience?'),
-                    const SizedBox(height: 12),
-                    _buildRatingSelector(),
-                    const SizedBox(height: 28),
-
-                    // Category Section
-                    _buildSectionLabel('Feedback Category'),
-                    const SizedBox(height: 12),
-                    _buildCategorySelector(),
-                    const SizedBox(height: 28),
-
-                    // Feedback Text Section
-                    _buildSectionLabel('Your Feedback'),
-                    const SizedBox(height: 12),
-                    _buildFeedbackInput(),
-                    const SizedBox(height: 28),
-
-                    // Submit Button
-                    _buildSubmitButton(),
-                  ],
-                ),
+        child: Column(
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.black.withOpacity(0.08)),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Text(
+                    'Feedback',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            
+            // Tab Bar
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black.withOpacity(0.06)),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
+                  color: darkCard,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicatorPadding: const EdgeInsets.all(4),
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.black54,
+                labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                dividerColor: Colors.transparent,
+                tabs: const [
+                  Tab(text: 'Submit'),
+                  Tab(text: 'History'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Tab Content
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildSubmitTab(),
+                  _buildHistoryTab(),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Padding(
+  Widget _buildSubmitTab() {
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              Navigator.pop(context);
-            },
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.black.withOpacity(0.08)),
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                size: 18,
-                color: Colors.black87,
+          const Text('Rate your experience', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(5, (i) {
+                final isSelected = i + 1 <= _rating;
+                return GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    setState(() => _rating = i + 1);
+                  },
+                  child: AnimatedScale(
+                    scale: isSelected ? 1.1 : 1.0,
+                    duration: const Duration(milliseconds: 150),
+                    child: Icon(
+                      isSelected ? Icons.star_rounded : Icons.star_outline_rounded,
+                      size: 40,
+                      color: isSelected ? const Color(0xFFFBBF24) : Colors.black26,
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text('Category', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: _categories.map((cat) {
+              final isSelected = _selectedCategory == cat;
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() => _selectedCategory = cat);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? blueAccent : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isSelected ? blueAccent : Colors.black12),
+                  ),
+                  child: Text(
+                    cat,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? Colors.white : Colors.black54,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 24),
+          const Text('Your Feedback', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: TextField(
+              controller: _feedbackController,
+              maxLines: 6,
+              maxLength: 1000,
+              decoration: InputDecoration(
+                hintText: 'Tell us what you think...',
+                hintStyle: TextStyle(color: Colors.black.withOpacity(0.3)),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.all(16),
               ),
             ),
           ),
-          const SizedBox(width: 16),
-          const Text(
-            'Submit Feedback',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Colors.black87,
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: _isSubmitting ? null : _submitFeedback,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: _isSubmitting ? Colors.black38 : darkCard,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (_isSubmitting)
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  else
+                    const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Text(
+                    _isSubmitting ? 'Submitting...' : 'Submit Feedback',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -2371,166 +3430,270 @@ class _SubmitFeedbackScreenState extends State<SubmitFeedbackScreen> {
     );
   }
 
-  Widget _buildSectionLabel(String label) {
-    return Text(
-      label,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w700,
-        color: Colors.black87,
-      ),
-    );
-  }
+  Widget _buildHistoryTab() {
+    if (_isLoadingHistory) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-  Widget _buildRatingSelector() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(5, (index) {
-          final starIndex = index + 1;
-          final isSelected = starIndex <= _rating;
-          return GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              setState(() => _rating = starIndex);
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.all(8),
-              child: Icon(
-                isSelected ? Icons.star_rounded : Icons.star_outline_rounded,
-                size: 40,
-                color: isSelected ? const Color(0xFFFBBF24) : Colors.black26,
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildCategorySelector() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: _categories.map((category) {
-        final isSelected = _selectedCategory == category;
-        return GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            setState(() => _selectedCategory = category);
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected ? blueAccent : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected ? blueAccent : Colors.black.withOpacity(0.1),
-              ),
-            ),
-            child: Text(
-              category,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : Colors.black54,
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildFeedbackInput() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
-      ),
-      child: TextField(
-        controller: _feedbackController,
-        maxLines: 6,
-        maxLength: 1000,
-        decoration: InputDecoration(
-          hintText: 'Tell us what you think about NeuroVerse...\n\nYour feedback helps us improve the app for everyone.',
-          hintStyle: TextStyle(
-            color: Colors.black.withOpacity(0.3),
-            fontSize: 14,
-            height: 1.5,
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.all(20),
-          counterStyle: TextStyle(
-            color: Colors.black.withOpacity(0.4),
-            fontSize: 12,
-          ),
-        ),
-        style: const TextStyle(
-          fontSize: 14,
-          color: Colors.black87,
-          height: 1.5,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSubmitButton() {
-    return GestureDetector(
-      onTap: _isSubmitting ? null : _submitFeedback,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: _isSubmitting ? Colors.black38 : darkCard,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: _isSubmitting
-              ? []
-              : [
-                  BoxShadow(
-                    color: darkCard.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-        ),
-        child: Row(
+    if (_feedbackHistory.isEmpty) {
+      return Center(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (_isSubmitting)
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(Colors.white),
-                ),
-              )
-            else
-              const Icon(
-                Icons.send_rounded,
-                color: Colors.white,
-                size: 20,
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: softLavender.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(24),
               ),
-            const SizedBox(width: 10),
+              child: Icon(Icons.feedback_outlined, size: 40, color: Colors.black.withOpacity(0.3)),
+            ),
+            const SizedBox(height: 20),
             Text(
-              _isSubmitting ? 'Submitting...' : 'Submit Feedback',
-              style: const TextStyle(
-                fontSize: 15,
+              'No feedback yet',
+              style: TextStyle(
+                fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: Colors.black.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your submitted feedbacks will appear here',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black.withOpacity(0.4),
+              ),
+            ),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () => _tabController.animateTo(0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(
+                  color: blueAccent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Submit Feedback',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
               ),
             ),
           ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadFeedbackHistory,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(20),
+        itemCount: _feedbackHistory.length + (_currentPage < _totalPages ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _feedbackHistory.length) {
+            return _buildLoadMoreButton();
+          }
+          return _buildFeedbackCard(_feedbackHistory[index]);
+        },
+      ),
+    );
+  }
+
+  Widget _buildFeedbackCard(Map<String, dynamic> feedback) {
+    final status = feedback['status'] ?? 'pending';
+    final category = feedback['category'] ?? 'general';
+    final rating = feedback['rating'];
+    final message = feedback['message'] ?? '';
+    final createdAt = feedback['created_at'];
+    final feedbackId = feedback['id'];
+
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
+
+    switch (status) {
+      case 'resolved':
+        statusColor = const Color(0xFF10B981);
+        statusText = 'Resolved';
+        statusIcon = Icons.check_circle_rounded;
+        break;
+      case 'in_progress':
+        statusColor = const Color(0xFFF59E0B);
+        statusText = 'In Progress';
+        statusIcon = Icons.autorenew_rounded;
+        break;
+      case 'reviewed':
+        statusColor = blueAccent;
+        statusText = 'Reviewed';
+        statusIcon = Icons.visibility_rounded;
+        break;
+      case 'closed':
+        statusColor = Colors.grey;
+        statusText = 'Closed';
+        statusIcon = Icons.archive_rounded;
+        break;
+      default:
+        statusColor = const Color(0xFFF97316);
+        statusText = 'Pending';
+        statusIcon = Icons.schedule_rounded;
+    }
+
+    String formattedDate = '';
+    if (createdAt != null) {
+      try {
+        final date = DateTime.parse(createdAt);
+        formattedDate = '${date.day}/${date.month}/${date.year}';
+      } catch (_) {}
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Category chip
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: blueAccent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _reverseCategoryMap[category] ?? category,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: blueAccent,
+                  ),
+                ),
+              ),
+              // Status chip
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, size: 14, color: statusColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Rating stars
+          if (rating != null) ...[
+            Row(
+              children: List.generate(5, (i) {
+                return Icon(
+                  i < rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                  size: 18,
+                  color: i < rating ? const Color(0xFFFBBF24) : Colors.black12,
+                );
+              }),
+            ),
+            const SizedBox(height: 10),
+          ],
+          // Message
+          Text(
+            message,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.black.withOpacity(0.7),
+              height: 1.5,
+            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 12),
+          // Footer
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                formattedDate,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black.withOpacity(0.4),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _deleteFeedback(feedbackId),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEE2E2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFDC2626)),
+                      const SizedBox(width: 4),
+                      const Text(
+                        'Delete',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFDC2626),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadMoreButton() {
+    return GestureDetector(
+      onTap: () {
+        setState(() => _currentPage++);
+        _loadFeedbackHistory();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.black.withOpacity(0.08)),
+        ),
+        child: const Center(
+          child: Text(
+            'Load More',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF3B82F6),
+            ),
+          ),
         ),
       ),
     );
@@ -2550,7 +3713,6 @@ class BrainLogoPainter extends CustomPainter {
     final centerX = size.width / 2;
     final centerY = size.height / 2;
 
-    // Left hemisphere
     final leftPath = Path();
     leftPath.moveTo(centerX - 2, centerY - size.height * 0.35);
     leftPath.cubicTo(
@@ -2560,7 +3722,6 @@ class BrainLogoPainter extends CustomPainter {
     );
     canvas.drawPath(leftPath, paint);
 
-    // Right hemisphere
     final rightPath = Path();
     rightPath.moveTo(centerX + 2, centerY - size.height * 0.35);
     rightPath.cubicTo(
@@ -2570,17 +3731,13 @@ class BrainLogoPainter extends CustomPainter {
     );
     canvas.drawPath(rightPath, paint);
 
-    // Center line
     canvas.drawLine(
       Offset(centerX, centerY - size.height * 0.3),
       Offset(centerX, centerY + size.height * 0.3),
       paint,
     );
 
-    // Neural connections
     paint.strokeWidth = 1.5;
-    
-    // Left side connections
     canvas.drawLine(
       Offset(centerX - size.width * 0.15, centerY - size.height * 0.1),
       Offset(centerX - size.width * 0.3, centerY - size.height * 0.15),
@@ -2591,8 +3748,6 @@ class BrainLogoPainter extends CustomPainter {
       Offset(centerX - size.width * 0.3, centerY + size.height * 0.15),
       paint,
     );
-
-    // Right side connections
     canvas.drawLine(
       Offset(centerX + size.width * 0.15, centerY - size.height * 0.1),
       Offset(centerX + size.width * 0.3, centerY - size.height * 0.15),

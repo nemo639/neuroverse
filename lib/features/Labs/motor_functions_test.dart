@@ -689,9 +689,9 @@ void _showCompleteDialog() {
     
     String routeName = '';
     if (test.name == 'Finger Tapping') {
-      routeName = '/test/finger-tap';
+      routeName = '/test/finger-tapping-test';
     } else if (test.name == 'Spiral Drawing') {
-      routeName = '/test/spiral-drawing';
+      routeName = '/test/spiral-drawing-test';
     } else if (test.name == 'Gait Analysis') {
       routeName = '/test/gait-analysis';
     }

@@ -721,11 +721,11 @@ void _showCompleteDialog() {
                   HapticFeedback.mediumImpact();
                   String routeName = '';
     if (test.name == 'Story Recall') {
-      routeName = '/test/story-recall';
+      routeName = '/test/story-recall-test';
     } else if (test.name == 'Sustained Vowel') {
-      routeName = '/test/sustained-vowel';
+      routeName = '/test/sustained-vowel-test';
     } else if (test.name == 'Picture Description') {
-      routeName = '/test/picture-description';
+      routeName = '/test/picture-description-test';
     }
 
     if (routeName.isNotEmpty) {

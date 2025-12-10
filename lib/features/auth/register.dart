@@ -143,8 +143,288 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
     return true;
   }
 
-  bool _validateEmail(String email) {
+  // ============================================================
+// PROFESSIONAL EMAIL VALIDATOR
+// Follows RFC 5322, RFC 5321, and WHATWG HTML Living Standard
+// Similar to Google, Microsoft, and other major companies
+// ============================================================
+
+/// Main email validation function
+/// Returns true if valid, false if invalid
+/// Sets emailError state with specific error message
+// ============================================================
+// PROFESSIONAL EMAIL VALIDATOR
+// Follows RFC 5322, RFC 5321, and WHATWG HTML Living Standard
+// Similar to Google, Microsoft, and other major companies
+// ============================================================
+
+/// Main email validation function
+/// Returns true if valid, false if invalid
+/// Sets emailError state with specific error message
+bool _validateEmail(String email) {
   // Trim whitespace
+  email = email.trim().toLowerCase();
+  
+  // ============ BASIC CHECKS ============
+  
+  // Check if empty
+  if (email.isEmpty) {
+    setState(() => emailError = "Email is required");
+    return false;
+  }
+  
+  // RFC 5321: Maximum email length is 254 characters
+  if (email.length > 254) {
+    setState(() => emailError = "Email is too long");
+    return false;
+  }
+  
+  // Minimum practical length (a@b.co = 6 chars)
+  if (email.length < 6) {
+    setState(() => emailError = "Email is too short");
+    return false;
+  }
+  
+  // ============ @ SYMBOL CHECK ============
+  
+  // Must contain exactly one @ symbol
+  final atCount = '@'.allMatches(email).length;
+  if (atCount == 0) {
+    setState(() => emailError = "Email must contain @");
+    return false;
+  }
+  if (atCount > 1) {
+    setState(() => emailError = "Email can only contain one @");
+    return false;
+  }
+  
+  final atIndex = email.indexOf('@');
+  final localPart = email.substring(0, atIndex);
+  final domainPart = email.substring(atIndex + 1);
+  
+  // ============ LOCAL PART VALIDATION (before @) ============
+  
+  // RFC 5321: Local part max length is 64 characters
+  if (localPart.isEmpty) {
+    setState(() => emailError = "Email username is required");
+    return false;
+  }
+  
+  if (localPart.length > 64) {
+    setState(() => emailError = "Email username is too long");
+    return false;
+  }
+  
+  // Cannot start or end with a dot
+  if (localPart.startsWith('.')) {
+    setState(() => emailError = "Email cannot start with a dot");
+    return false;
+  }
+  
+  if (localPart.endsWith('.')) {
+    setState(() => emailError = "Email cannot end with a dot before @");
+    return false;
+  }
+  
+  // Check for consecutive dots (..)
+  if (localPart.contains('..')) {
+    setState(() => emailError = "Email cannot have consecutive dots");
+    return false;
+  }
+  
+  // Valid characters in local part: a-z, 0-9, and . _ % + -
+  // This is the practical subset used by major providers
+  final localPartRegex = RegExp(r'^[a-zA-Z0-9._%+-]+$');
+  if (!localPartRegex.hasMatch(localPart)) {
+    setState(() => emailError = "Email contains invalid characters");
+    return false;
+  }
+  
+  // Google/Microsoft Rule: Usernames of 8+ characters must have at least one letter
+  // Prevents spam accounts with purely numeric usernames
+  if (localPart.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').length >= 8) {
+    if (!RegExp(r'[a-zA-Z]').hasMatch(localPart)) {
+      setState(() => emailError = "Email username must contain at least one letter");
+      return false;
+    }
+  }
+  
+  // ============ DOMAIN PART VALIDATION (after @) ============
+  
+  if (domainPart.isEmpty) {
+    setState(() => emailError = "Domain is required");
+    return false;
+  }
+  
+  // RFC 5321: Domain max length is 253 characters
+  if (domainPart.length > 253) {
+    setState(() => emailError = "Domain is too long");
+    return false;
+  }
+  
+  // Domain must contain at least one dot
+  if (!domainPart.contains('.')) {
+    setState(() => emailError = "Please enter a complete domain (e.g., gmail.com)");
+    return false;
+  }
+  
+  // Check for invalid characters in domain
+  // Valid: a-z, 0-9, dots, and hyphens
+  final domainRegex = RegExp(r'^[a-zA-Z0-9.-]+$');
+  if (!domainRegex.hasMatch(domainPart)) {
+    setState(() => emailError = "Domain contains invalid characters");
+    return false;
+  }
+  
+  // Cannot start or end with dot or hyphen
+  if (domainPart.startsWith('.') || domainPart.startsWith('-')) {
+    setState(() => emailError = "Domain cannot start with a dot or hyphen");
+    return false;
+  }
+  
+  if (domainPart.endsWith('.') || domainPart.endsWith('-')) {
+    setState(() => emailError = "Domain cannot end with a dot or hyphen");
+    return false;
+  }
+  
+  // Check for consecutive dots in domain
+  if (domainPart.contains('..')) {
+    setState(() => emailError = "Domain cannot have consecutive dots");
+    return false;
+  }
+  
+  // ============ DOMAIN LABELS VALIDATION ============
+  
+  final domainLabels = domainPart.split('.');
+  
+  // Must have at least 2 labels (e.g., gmail.com)
+  if (domainLabels.length < 2) {
+    setState(() => emailError = "Please enter a valid domain");
+    return false;
+  }
+  
+  // Validate each domain label
+  for (int i = 0; i < domainLabels.length; i++) {
+    final label = domainLabels[i];
+    
+    // Each label must be 1-63 characters
+    if (label.isEmpty) {
+      setState(() => emailError = "Invalid domain format");
+      return false;
+    }
+    
+    if (label.length > 63) {
+      setState(() => emailError = "Domain part is too long");
+      return false;
+    }
+    
+    // Labels cannot start or end with hyphen
+    if (label.startsWith('-') || label.endsWith('-')) {
+      setState(() => emailError = "Domain parts cannot start or end with hyphen");
+      return false;
+    }
+  }
+  
+  // ============ TLD (TOP-LEVEL DOMAIN) VALIDATION ============
+  
+  final tld = domainLabels.last.toLowerCase();
+  
+  // TLD must be at least 2 characters
+  if (tld.length < 2) {
+    setState(() => emailError = "Invalid domain extension");
+    return false;
+  }
+  
+  // TLD should only contain letters (no numbers except for IDN)
+  final tldRegex = RegExp(r'^[a-zA-Z]{2,}$');
+  if (!tldRegex.hasMatch(tld)) {
+    // Allow special cases like xn-- (punycode)
+    if (!tld.startsWith('xn--')) {
+      setState(() => emailError = "Invalid domain extension");
+      return false;
+    }
+  }
+  
+  // ============ DUPLICATE TLD DETECTION ============
+  // Catches: gmail.com.com, yahoo.com.org, etc.
+  
+  final commonTLDs = {
+    'com', 'net', 'org', 'edu', 'gov', 'mil', 'int', 'io', 'ai', 'app',
+    'dev', 'co', 'me', 'info', 'biz', 'xyz', 'online', 'site', 'tech',
+    'store', 'shop', 'blog', 'cloud', 'email', 'live', 'pro', 'tv', 'cc',
+  };
+  
+  final countryTLDs = {
+    'uk', 'us', 'ca', 'au', 'de', 'fr', 'jp', 'cn', 'in', 'pk', 'br',
+    'it', 'es', 'nl', 'ru', 'kr', 'mx', 'nz', 'za', 'sg', 'hk', 'ae',
+  };
+  
+  // Valid second-level country domains (like co.uk, com.au)
+  final validSecondLevelDomains = {
+    'uk': ['co', 'ac', 'gov', 'org', 'net', 'me'],
+    'au': ['com', 'net', 'org', 'edu', 'gov'],
+    'nz': ['co', 'net', 'org', 'ac', 'govt'],
+    'jp': ['co', 'ac', 'go', 'or', 'ne'],
+    'in': ['co', 'net', 'org', 'edu', 'gov', 'ac'],
+    'za': ['co', 'net', 'org', 'edu', 'gov', 'ac'],
+    'br': ['com', 'net', 'org', 'edu', 'gov'],
+    'cn': ['com', 'net', 'org', 'edu', 'gov'],
+    'pk': ['com', 'net', 'org', 'edu', 'gov'],
+  };
+  
+  // Check for suspicious duplicate TLD patterns
+  if (domainLabels.length >= 3) {
+    final secondToLast = domainLabels[domainLabels.length - 2].toLowerCase();
+    
+    // If both second-to-last and last are common TLDs
+    if (commonTLDs.contains(secondToLast) && commonTLDs.contains(tld)) {
+      // This is likely a typo like gmail.com.com
+      setState(() => emailError = "Invalid domain - possible duplicate extension");
+      return false;
+    }
+    
+    // Allow valid patterns like example.co.uk
+    if (commonTLDs.contains(secondToLast) && countryTLDs.contains(tld)) {
+      // Check if this is a valid country second-level domain
+      if (!validSecondLevelDomains.containsKey(tld) ||
+          !validSecondLevelDomains[tld]!.contains(secondToLast)) {
+        // Could be typo like gmail.com.pk instead of gmail.pk
+        // We'll allow it but could warn - for now, allow
+      }
+    }
+  }
+  
+  // ============ COMMON TYPO DETECTION ============
+  
+  // Common domain typos
+  final commonDomains = {
+    'gmail.com': ['gmal.com', 'gmial.com', 'gmaill.com', 'gmail.co', 'gmail.cm', 'gamil.com', 'gnail.com'],
+    'yahoo.com': ['yaho.com', 'yahooo.com', 'yahoo.co', 'yahoo.cm', 'yhaoo.com'],
+    'hotmail.com': ['hotmal.com', 'hotmai.com', 'hotmail.co', 'hotmail.cm'],
+    'outlook.com': ['outlok.com', 'outllook.com', 'outlook.co'],
+    'icloud.com': ['iclould.com', 'icloud.co'],
+  };
+  
+  for (final entry in commonDomains.entries) {
+    if (entry.value.contains(domainPart)) {
+      setState(() => emailError = "Did you mean ${entry.key}?");
+      return false;
+    }
+  }
+  
+  // ============ ALL CHECKS PASSED ============
+  
+  setState(() => emailError = null);
+  return true;
+}
+
+// ============================================================
+// SIMPLE VERSION (If you prefer a shorter validator)
+// ============================================================
+
+/// Simplified email validation using WHATWG standard
+/// This is what browsers use for <input type="email">
+bool _validateEmailSimple(String email) {
   email = email.trim();
   
   if (email.isEmpty) {
@@ -152,75 +432,9 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
     return false;
   }
   
-  // Length check (email addresses shouldn't be too long)
-  if (email.length > 254) {
-    setState(() => emailError = "Email is too long");
-    return false;
-  }
-  
-  // Must contain exactly one @
-  if (email.split('@').length != 2) {
-    setState(() => emailError = "Email must contain exactly one @");
-    return false;
-  }
-  
-  // Check for consecutive dots
-  if (email.contains('..')) {
-    setState(() => emailError = "Email cannot contain consecutive dots");
-    return false;
-  }
-  
-  // Check for dots at invalid positions
-  if (email.startsWith('.') || email.endsWith('.')) {
-    setState(() => emailError = "Email cannot start or end with a dot");
-    return false;
-  }
-  
-  // Check for dot before/after @
-  if (email.contains('.@') || email.contains('@.')) {
-    setState(() => emailError = "Invalid dot placement near @");
-    return false;
-  }
-  
-  // Check for spaces
-  if (email.contains(' ')) {
-    setState(() => emailError = "Email cannot contain spaces");
-    return false;
-  }
-  
-  // Split email into local and domain parts
-  final parts = email.split('@');
-  final localPart = parts[0];
-  final domainPart = parts[1];
-  
-  // Local part validation (before @)
-  if (localPart.isEmpty || localPart.length > 64) {
-    setState(() => emailError = "Invalid email format");
-    return false;
-  }
-  
-  // Domain part validation (after @)
-  if (domainPart.isEmpty || domainPart.length > 253) {
-    setState(() => emailError = "Invalid domain");
-    return false;
-  }
-  
-  // Domain must contain at least one dot
-  if (!domainPart.contains('.')) {
-    setState(() => emailError = "Email must have a valid domain (e.g., .com)");
-    return false;
-  }
-  
-  // Check domain doesn't start or end with hyphen
-  if (domainPart.startsWith('-') || domainPart.endsWith('-')) {
-    setState(() => emailError = "Invalid domain format");
-    return false;
-  }
-  
-  // Main regex validation (RFC 5322 simplified but robust)
+  // WHATWG HTML Living Standard regex
   final emailRegex = RegExp(
-    r'^[a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-    caseSensitive: false,
+    r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
   );
   
   if (!emailRegex.hasMatch(email)) {
@@ -228,14 +442,34 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
     return false;
   }
   
-  // Check for valid TLD (at least 2 characters)
-  final tld = domainPart.split('.').last;
-  if (tld.length < 2) {
-    setState(() => emailError = "Invalid domain extension");
+  // Length check
+  if (email.length > 254) {
+    setState(() => emailError = "Email is too long");
     return false;
   }
   
-  // All checks passed
+  // Google/Microsoft Rule: Usernames of 8+ chars must have at least one letter
+  final localPart = email.split('@').first;
+  if (localPart.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').length >= 8) {
+    if (!RegExp(r'[a-zA-Z]').hasMatch(localPart)) {
+      setState(() => emailError = "Email username must contain at least one letter");
+      return false;
+    }
+  }
+  
+  // Check for duplicate TLDs (gmail.com.com)
+  final domain = email.split('@').last.toLowerCase();
+  final parts = domain.split('.');
+  if (parts.length >= 3) {
+    final last = parts.last;
+    final secondLast = parts[parts.length - 2];
+    final commonTLDs = ['com', 'net', 'org', 'io', 'co', 'edu'];
+    if (commonTLDs.contains(last) && commonTLDs.contains(secondLast)) {
+      setState(() => emailError = "Invalid domain format");
+      return false;
+    }
+  }
+  
   setState(() => emailError = null);
   return true;
 }

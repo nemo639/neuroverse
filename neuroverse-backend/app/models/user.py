@@ -54,6 +54,8 @@ class User(Base):
     wellness_entries = relationship("WellnessEntry", back_populates="user", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="user", cascade="all, delete-orphan")
 
+    feedbacks = relationship("Feedback", back_populates="user", cascade="all, delete-orphan")
+
     @property
     def full_name(self) -> str:
         return f"{self.first_name} {self.last_name}"

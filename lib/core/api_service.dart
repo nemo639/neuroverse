@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -8,7 +9,7 @@ class ApiService {
   // ============== BASE URL CONFIGURATION ==============
   // Automatically selects correct URL based on platform
   static String get baseUrl {
-  const backendIP = '10.10.16.81:8000';   // <---- YOUR WORKING IP
+  const backendIP = '10.54.16.25:8000';   // <---- YOUR WORKING IP
 
   if (kIsWeb) {
     // Flutter Web uses browser → needs direct IP
@@ -659,48 +660,50 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> uploadProfileImage(File file) async {
-  try {
-    final uri = Uri.parse('$baseUrl$apiVersion/users/profile-image');
-    final request = http.MultipartRequest('POST', uri);
+  // ============== PROFILE IMAGE ENDPOINTS ==============
 
-    request.headers['Authorization'] = 'Bearer $_accessToken';
+  /// Upload profile image - Works on Web and Mobile
+  static Future<Map<String, dynamic>> uploadProfileImage(Uint8List bytes, String fileName) async {
+    try {
+      final uri = Uri.parse('$baseUrl$apiVersion/users/profile-image');
+      final request = http.MultipartRequest('POST', uri);
 
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        'file',    // IMPORTANT → Must match backend name
-        file.path,
-      ),
-    );
+      request.headers['Authorization'] = 'Bearer $_accessToken';
 
-    final response = await request.send();
-    final responseBody = await response.stream.bytesToString();
-    final data = jsonDecode(responseBody);
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: fileName,
+        ),
+      );
 
-    if (response.statusCode == 200) {
-      return {'success': true, 'data': data};
-    } else {
-      return {'success': false, 'error': data['detail'] ?? 'Upload failed'};
+      final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
+      final data = jsonDecode(responseBody);
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': data};
+      } else {
+        return {'success': false, 'error': data['detail'] ?? 'Upload failed'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Upload error: $e'};
     }
-  } catch (e) {
-    return {'success': false, 'error': 'Upload error: $e'};
   }
-}
 
-  static Future<Map<String, dynamic>> deleteProfileImage() async {
-  final token = _accessToken;
-
-  final url = Uri.parse("$baseUrl/users/profile-image");
-
-  final response = await http.delete(
-    url,
-    headers: {
-      "Authorization": "Bearer $token",
-    },
-  );
-
-  return _handleResponse(response);
-}
+  /// Remove profile image
+  static Future<Map<String, dynamic>> removeProfileImage() async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl$apiVersion/users/profile-image'),
+        headers: _headers,
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed: $e'};
+    }
+  }
 
   // ============== HEALTH CHECK ==============
 
@@ -714,6 +717,65 @@ class ApiService {
       return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+
+  // ============== FEEDBACK ENDPOINTS ==============
+
+  /// Submit feedback
+  static Future<Map<String, dynamic>> submitFeedback({
+    required String category,
+    required String message,
+    int? rating,
+    String? appVersion,
+    String? deviceInfo,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'category': category,
+        'message': message,
+      };
+      if (rating != null) body['rating'] = rating;
+      if (appVersion != null) body['app_version'] = appVersion;
+      if (deviceInfo != null) body['device_info'] = deviceInfo;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl$apiVersion/feedback/'),
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed: $e'};
+    }
+  }
+
+  /// Get user's feedbacks
+  static Future<Map<String, dynamic>> getMyFeedbacks({
+    int page = 1,
+    int perPage = 10,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl$apiVersion/feedback/my-feedbacks?page=$page&per_page=$perPage'),
+        headers: _headers,
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed: $e'};
+    }
+  }
+
+  /// Delete feedback
+  static Future<Map<String, dynamic>> deleteFeedback({required int feedbackId}) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl$apiVersion/feedback/$feedbackId'),
+        headers: _headers,
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed: $e'};
     }
   }
 }

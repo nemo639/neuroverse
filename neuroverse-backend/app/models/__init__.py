@@ -8,6 +8,7 @@ from app.models.test_item import TestItem
 from app.models.test_result import TestResult
 from app.models.wellness import WellnessEntry
 from app.models.report import Report
+from app.models.feedback import Feedback, FeedbackCategory, FeedbackStatus
 
 __all__ = [
     "User",
@@ -18,4 +19,7 @@ __all__ = [
     "TestResult",
     "WellnessEntry",
     "Report",
+    "Feedback",
+    "FeedbackCategory",
+    "FeedbackStatus",
 ]

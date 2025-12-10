@@ -731,11 +731,11 @@ void _showCompleteDialog() {
                   // Navigate to actual test screen and get result
     String routeName = '';
     if (test.name == 'Stroop Test') {
-      routeName = '/test/stroop';
+      routeName = '/test/stroop-test';
     } else if (test.name == 'N-Back Memory') {
-      routeName = '/test/nback';
+      routeName = '/test/nback-test';
     } else if (test.name == 'Word List Recall') {
-      routeName = '/test/word-recall';
+      routeName = '/test/word-recall-test';
     }
 
     if (routeName.isNotEmpty) {
