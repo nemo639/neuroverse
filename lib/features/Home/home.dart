@@ -14,22 +14,26 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _pageController;
   int _selectedNavIndex = 0;
-  int _selectedTab = 0;
   final String userName = "Dr. Sarah";
-  // Add these new variables:
-bool _isLoading = true;
-Map<String, dynamic>? _dashboardData;
-Map<String, dynamic>? _wellnessData;
-String _userFirstName = 'User';
-int _adRisk = 0;
-int _pdRisk = 0;
-int _overallRisk = 0;
-String _riskLevel = 'Low';
-String _lastUpdated = '';
-double _screenTime = 0;
-double _gamingHours = 0;
-double _sleepHours = 0;
-List<dynamic> _recentTests = [];
+  
+  // State variables
+  bool _isLoading = true;
+  Map<String, dynamic>? _dashboardData;
+  Map<String, dynamic>? _wellnessData;
+  String _userFirstName = 'User';
+  int _adRisk = 0;
+  int _pdRisk = 0;
+  int _overallRisk = 0;
+  String _riskLevel = 'Low';
+  String _lastUpdated = '';
+  double _screenTime = 0;
+  double _gamingHours = 0;
+  double _sleepHours = 0;
+  List<dynamic> _recentTests = [];
+  
+  // Weekly screen time data
+  List<double> _weeklyScreenTime = [6.2, 7.5, 5.8, 8.1, 6.9, 4.5, 3.2];
+  
   // Design colors from reference
   static const Color bgColor = Color(0xFFF7F7F7);
   static const Color mintGreen = Color(0xFFB8E8D1);
@@ -46,7 +50,7 @@ List<dynamic> _recentTests = [];
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..forward();
-    _loadData();  // Add this
+    _loadData();
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -60,78 +64,114 @@ List<dynamic> _recentTests = [];
     _pageController.dispose();
     super.dispose();
   }
-// Add this new method:
-Future<void> _loadData() async {
-  // Load user dashboard
-  final dashResult = await ApiService.getUserDashboard();
-  final wellnessResult = await ApiService.getWellnessDashboard();
-  final userResult = await ApiService.getCurrentUser();
 
-  if (mounted) {
-    setState(() {
-      _isLoading = false;
+  Future<void> _loadData() async {
+    final dashResult = await ApiService.getUserDashboard();
+    final wellnessResult = await ApiService.getWellnessDashboard();
+    final userResult = await ApiService.getCurrentUser();
 
-      if (userResult['success']) {
-        _userFirstName = userResult['data']['first_name'] ?? 'User';
-      }
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
 
-      if (dashResult['success']) {
-        _dashboardData = dashResult['data'];
-        _adRisk = (_dashboardData?['ad_risk_score'] ?? 0).toInt();
-        _pdRisk = (_dashboardData?['pd_risk_score'] ?? 0).toInt();
-        _overallRisk = ((_adRisk + _pdRisk) / 2).toInt();
-        _riskLevel = _getRiskLevel(_overallRisk);
-        _recentTests = _dashboardData?['categories'] ?? [];
-      }
+        if (userResult['success']) {
+          _userFirstName = userResult['data']['first_name'] ?? 'User';
+        }
 
-      if (wellnessResult['success']) {
-        _wellnessData = wellnessResult['data'];
-        _screenTime = (_wellnessData?['today']?['screen_time_hours'] ?? 0).toDouble();
-        _gamingHours = (_wellnessData?['today']?['gaming_hours'] ?? 0).toDouble();
-        _sleepHours = (_wellnessData?['today']?['sleep_hours'] ?? 0).toDouble();
-      }
-    });
+        if (dashResult['success']) {
+          _dashboardData = dashResult['data'];
+          _adRisk = (_dashboardData?['ad_risk_score'] ?? 0).toInt();
+          _pdRisk = (_dashboardData?['pd_risk_score'] ?? 0).toInt();
+          _overallRisk = ((_adRisk + _pdRisk) / 2).toInt();
+          _riskLevel = _getRiskLevel(_overallRisk);
+          _recentTests = _dashboardData?['categories'] ?? [];
+        }
+
+        if (wellnessResult['success']) {
+          _wellnessData = wellnessResult['data'];
+          _screenTime = (_wellnessData?['today']?['screen_time_hours'] ?? 0).toDouble();
+          _gamingHours = (_wellnessData?['today']?['gaming_hours'] ?? 0).toDouble();
+          _sleepHours = (_wellnessData?['today']?['sleep_hours'] ?? 0).toDouble();
+        }
+      });
+    }
   }
-}
 
-String _getRiskLevel(int score) {
-  if (score < 25) return 'Low';
-  if (score < 50) return 'Moderate';
-  if (score < 75) return 'Elevated';
-  return 'High';
-}
+  String _getRiskLevel(int score) {
+    if (score < 25) return 'Low';
+    if (score < 50) return 'Moderate';
+    if (score < 75) return 'Elevated';
+    return 'High';
+  }
+
   void _onNavItemTapped(int index) {
     HapticFeedback.selectionClick();
     
     switch (index) {
-      case 0: // Home
+      case 0:
         setState(() => _selectedNavIndex = index);
         break;
-      case 1: // Tests
+      case 1:
         Navigator.pushNamed(context, '/tests');
         break;
-      case 2: // Reports
+      case 2:
         Navigator.pushNamed(context, '/reports');
         break;
-      case 3: // XAI
+      case 3:
         Navigator.pushNamed(context, '/XAI');
         break;
-      case 4: // Profile
+      case 4:
         Navigator.pushNamed(context, '/profile');
         break;
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-    return Scaffold(
-      backgroundColor: bgColor,
-      body: const Center(
-        child: CircularProgressIndicator(),
+  void _showWellnessGoalsDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _WellnessGoalsSheet(
+        currentScreenTime: _screenTime,
+        currentSleepHours: _sleepHours,
+        currentGamingHours: _gamingHours,
+        onSave: (goals) async {
+          Navigator.pop(context);
+          
+          // Call API to save goals
+          final result = await ApiService.saveWellnessGoals(goals: goals);
+          
+          if (result['success']) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Goals saved successfully!'),
+                backgroundColor: Color(0xFF10B981),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result['error'] ?? 'Failed to save goals'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: bgColor,
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    
     return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
@@ -147,8 +187,6 @@ String _getRiskLevel(int score) {
                     _buildHeader(),
                     const SizedBox(height: 20),
                     _buildWelcomeSection(),
-                    const SizedBox(height: 20),
-                    _buildTabPills(),
                     const SizedBox(height: 24),
                     _buildMainRiskCard(),
                     const SizedBox(height: 16),
@@ -181,7 +219,6 @@ String _getRiskLevel(int score) {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // App Logo & Name
             Row(
               children: [
                 Container(
@@ -224,7 +261,6 @@ String _getRiskLevel(int score) {
               ],
             ),
             
-            // Notification & Profile
             Row(
               children: [
                 Container(
@@ -305,7 +341,7 @@ String _getRiskLevel(int score) {
               ),
             ),
             Text(
-              'Dashboard',
+              'Overview',
               style: TextStyle(
                 fontSize: 38,
                 fontWeight: FontWeight.w800,
@@ -320,56 +356,16 @@ String _getRiskLevel(int score) {
     );
   }
 
-  Widget _buildTabPills() {
-    final tabs = ['Overview', 'Statistics', 'History'];
-    return _buildAnimatedWidget(
-      delay: 0.1,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          children: List.generate(tabs.length, (index) {
-            final isSelected = _selectedTab == index;
-            return Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  setState(() => _selectedTab = index);
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isSelected ? darkCard : Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(
-                      color: isSelected ? darkCard : Colors.black.withOpacity(0.1),
-                    ),
-                  ),
-                  child: Text(
-                    tabs[index],
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected ? Colors.white : Colors.black54,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-
   Widget _buildMainRiskCard() {
     return _buildAnimatedWidget(
       delay: 0.15,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: GestureDetector(
-          onTap: () => HapticFeedback.lightImpact(),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.pushNamed(context, '/XAI');
+          },
           child: Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -427,7 +423,7 @@ String _getRiskLevel(int score) {
                       ),
                       child: Text(
                         '$_riskLevel Risk',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: Colors.black87,
@@ -436,7 +432,7 @@ String _getRiskLevel(int score) {
                     ),
                     const SizedBox(width: 12),
                     Text(
-                      'Updated 2h ago',
+                      'Tap to view XAI',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -533,43 +529,43 @@ String _getRiskLevel(int score) {
     );
   }
 
- Widget _buildStatsRow() {
-  return _buildAnimatedWidget(
-    delay: 0.2,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildStatCard(
-              title: "Alzheimer's",
-              subtitle: 'Risk Score',
-              value: _adRisk.toString(),
-              unit: '/100',
-              badge: _getRiskLevel(_adRisk),
-              badgeColor: _adRisk < 25 ? const Color(0xFF059669) : const Color(0xFFEF4444),
-              bgColor: mintGreen,
-              icon: Icons.psychology_outlined,
+  Widget _buildStatsRow() {
+    return _buildAnimatedWidget(
+      delay: 0.2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                title: "Alzheimer's",
+                subtitle: 'Risk Score',
+                value: _adRisk.toString(),
+                unit: '/100',
+                badge: _getRiskLevel(_adRisk),
+                badgeColor: _adRisk < 25 ? const Color(0xFF059669) : const Color(0xFFEF4444),
+                bgColor: mintGreen,
+                icon: Icons.psychology_outlined,
+              ),
             ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: _buildStatCard(
-              title: "Parkinson's",
-              subtitle: 'Risk Score',
-              value: _pdRisk.toString(),
-              unit: '/100',
-              badge: _getRiskLevel(_pdRisk),
-              badgeColor: _pdRisk < 25 ? const Color(0xFF059669) : const Color(0xFFEF4444),
-              bgColor: softLavender,
-              icon: Icons.timeline_rounded,
+            const SizedBox(width: 14),
+            Expanded(
+              child: _buildStatCard(
+                title: "Parkinson's",
+                subtitle: 'Risk Score',
+                value: _pdRisk.toString(),
+                unit: '/100',
+                badge: _getRiskLevel(_pdRisk),
+                badgeColor: _pdRisk < 25 ? const Color(0xFF059669) : const Color(0xFFEF4444),
+                bgColor: softLavender,
+                icon: Icons.timeline_rounded,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildStatCard({
     required String title,
@@ -877,7 +873,7 @@ String _getRiskLevel(int score) {
           ),
           child: Column(
             children: [
-              // Header Section with gradient accent
+              // Header Section
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -936,7 +932,7 @@ String _getRiskLevel(int score) {
                           children: [
                             Text(
                               _screenTime.toStringAsFixed(1),
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 48,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.black87,
@@ -990,27 +986,33 @@ String _getRiskLevel(int score) {
                         ),
                       ],
                     ),
-                    Container(
-                      width: 70,
-                      height: 70,
-                      decoration: BoxDecoration(
-                        color: creamBeige,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: Colors.black.withOpacity(0.06),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: creamBeige.withOpacity(0.5),
-                            blurRadius: 15,
-                            offset: const Offset(0, 5),
+                    GestureDetector(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        _showWellnessGoalsDialog();
+                      },
+                      child: Container(
+                        width: 70,
+                        height: 70,
+                        decoration: BoxDecoration(
+                          color: creamBeige,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.black.withOpacity(0.06),
                           ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.phone_android_rounded,
-                        color: Colors.black54,
-                        size: 32,
+                          boxShadow: [
+                            BoxShadow(
+                              color: creamBeige.withOpacity(0.5),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.flag_rounded,
+                          color: Colors.black54,
+                          size: 32,
+                        ),
                       ),
                     ),
                   ],
@@ -1079,7 +1081,7 @@ String _getRiskLevel(int score) {
                             ),
                             SizedBox(width: 8),
                             Text(
-                              'Weekly Patterns',
+                              'Weekly Screen Time',
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
@@ -1113,13 +1115,13 @@ String _getRiskLevel(int score) {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          _buildWeeklyBar('Mon', 0.6, false),
-                          _buildWeeklyBar('Tue', 0.75, false),
-                          _buildWeeklyBar('Wed', 0.5, false),
-                          _buildWeeklyBar('Thu', 0.85, false),
-                          _buildWeeklyBar('Fri', 0.7, true), // Today
-                          _buildWeeklyBar('Sat', 0.4, false),
-                          _buildWeeklyBar('Sun', 0.3, false),
+                          _buildWeeklyBar('Mon', _weeklyScreenTime[0], false),
+                          _buildWeeklyBar('Tue', _weeklyScreenTime[1], false),
+                          _buildWeeklyBar('Wed', _weeklyScreenTime[2], false),
+                          _buildWeeklyBar('Thu', _weeklyScreenTime[3], false),
+                          _buildWeeklyBar('Fri', _weeklyScreenTime[4], true),
+                          _buildWeeklyBar('Sat', _weeklyScreenTime[5], false),
+                          _buildWeeklyBar('Sun', _weeklyScreenTime[6], false),
                         ],
                       ),
                     ),
@@ -1137,7 +1139,7 @@ String _getRiskLevel(int score) {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Screen Time',
+                          'Screen Time (Hours)',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
@@ -1231,31 +1233,48 @@ String _getRiskLevel(int score) {
     );
   }
 
-  Widget _buildWeeklyBar(String day, double value, bool isToday) {
+  Widget _buildWeeklyBar(String day, double screenTimeHours, bool isToday) {
+    // Normalize value between 0-1 for height
+    final normalizedValue = (screenTimeHours / 12).clamp(0.0, 1.0);
+    
+    // Calculate glow intensity based on screen time
+    final glowIntensity = (screenTimeHours / 8).clamp(0.0, 1.0);
+    
+    // Color based on screen time
+    Color barColor;
+    if (screenTimeHours < 4) {
+      barColor = const Color(0xFF10B981); // Green
+    } else if (screenTimeHours < 6) {
+      barColor = const Color(0xFFFBBF24); // Yellow
+    } else if (screenTimeHours < 8) {
+      barColor = const Color(0xFFF59E0B); // Orange
+    } else {
+      barColor = const Color(0xFFEF4444); // Red
+    }
+    
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Container(
           width: 30,
-          height: 55 * value,
+          height: 55 * normalizedValue,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: isToday
                   ? [softLavender, softLavender.withOpacity(0.6)]
-                  : [mintGreen, mintGreen.withOpacity(0.6)],
+                  : [barColor, barColor.withOpacity(0.6)],
             ),
             borderRadius: BorderRadius.circular(8),
-            boxShadow: isToday
-                ? [
-                    BoxShadow(
-                      color: softLavender.withOpacity(0.5),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
+            boxShadow: [
+              BoxShadow(
+                color: (isToday ? softLavender : barColor).withOpacity(0.3 + (glowIntensity * 0.5)),
+                blurRadius: 8 + (glowIntensity * 15),
+                spreadRadius: glowIntensity * 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
@@ -1268,86 +1287,6 @@ String _getRiskLevel(int score) {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildExplainableAICard() {
-    return _buildAnimatedWidget(
-      delay: 0.3,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            Navigator.pushNamed(context, '/xai');
-          },
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.black.withOpacity(0.08)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: mintGreen,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(
-                    Icons.visibility_rounded,
-                    color: Colors.black87,
-                    size: 26,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Explainable AI',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'View saliency maps & SHAP values',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black.withOpacity(0.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: softLavender,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'View',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -1555,7 +1494,247 @@ String _getRiskLevel(int score) {
   }
 }
 
-// Custom Brain Icon Painter
+// Wellness Goals Sheet
+class _WellnessGoalsSheet extends StatefulWidget {
+  final double currentScreenTime;
+  final double currentSleepHours;
+  final double currentGamingHours;
+  final Function(Map<String, double>) onSave;
+  
+  const _WellnessGoalsSheet({
+    required this.currentScreenTime,
+    required this.currentSleepHours,
+    required this.currentGamingHours,
+    required this.onSave,
+  });
+  
+  @override
+  State<_WellnessGoalsSheet> createState() => _WellnessGoalsSheetState();
+}
+
+class _WellnessGoalsSheetState extends State<_WellnessGoalsSheet> {
+  late double _screenTimeGoal;
+  late double _sleepGoal;
+  late double _gamingGoal;
+  
+  @override
+  void initState() {
+    super.initState();
+    _screenTimeGoal = widget.currentScreenTime > 0 ? widget.currentScreenTime : 4.0;
+    _sleepGoal = widget.currentSleepHours > 0 ? widget.currentSleepHours : 8.0;
+    _gamingGoal = widget.currentGamingHours > 0 ? widget.currentGamingHours : 2.0;
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                const Text(
+                  'Set Wellness Goals',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+          
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildGoalSlider(
+                    label: 'Daily Screen Time Goal',
+                    icon: Icons.phone_android_rounded,
+                    value: _screenTimeGoal,
+                    min: 1,
+                    max: 12,
+                    unit: 'hours',
+                    color: const Color(0xFF8B5CF6),
+                    onChanged: (value) => setState(() => _screenTimeGoal = value),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  _buildGoalSlider(
+                    label: 'Daily Sleep Goal',
+                    icon: Icons.bedtime_rounded,
+                    value: _sleepGoal,
+                    min: 4,
+                    max: 12,
+                    unit: 'hours',
+                    color: const Color(0xFF10B981),
+                    onChanged: (value) => setState(() => _sleepGoal = value),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  _buildGoalSlider(
+                    label: 'Daily Gaming Limit',
+                    icon: Icons.sports_esports_rounded,
+                    value: _gamingGoal,
+                    min: 0,
+                    max: 6,
+                    unit: 'hours',
+                    color: const Color(0xFFEC4899),
+                    onChanged: (value) => setState(() => _gamingGoal = value),
+                  ),
+                  
+                  const SizedBox(height: 32),
+                  
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3CD),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, color: Color(0xFFD97706)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'These goals help us provide personalized wellness insights',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.black.withOpacity(0.7),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  widget.onSave({
+                    'screen_time': _screenTimeGoal,
+                    'sleep': _sleepGoal,
+                    'gaming': _gamingGoal,
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1A1A1A),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text(
+                  'Save Goals',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildGoalSlider({
+    required String label,
+    required IconData icon,
+    required double value,
+    required double min,
+    required double max,
+    required String unit,
+    required Color color,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    '${value.toStringAsFixed(1)} $unit',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SliderTheme(
+          data: SliderThemeData(
+            activeTrackColor: color,
+            inactiveTrackColor: color.withOpacity(0.2),
+            thumbColor: color,
+            overlayColor: color.withOpacity(0.2),
+            trackHeight: 6,
+          ),
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: ((max - min) * 2).toInt(),
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Custom Painters
 class BrainIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -1626,7 +1805,6 @@ class BrainIconPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// Circular Progress Painter
 class CircularProgressPainter extends CustomPainter {
   final double progress;
   final double strokeWidth;

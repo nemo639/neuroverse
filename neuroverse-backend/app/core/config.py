@@ -5,6 +5,7 @@ NeuroVerse Configuration Settings
 from pydantic_settings import BaseSettings
 from typing import Optional, List
 from functools import lru_cache
+import os
 
 
 class Settings(BaseSettings):
@@ -45,7 +46,11 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
     UPLOAD_DIR: str = "uploads"
     ALLOWED_AUDIO_TYPES: List[str] = ["audio/wav", "audio/mp3", "audio/mpeg", "audio/webm"]
-    ALLOWED_IMAGE_TYPES: List[str] = ["image/jpg","image/jpeg", "image/png", "image/webp"]
+    ALLOWED_IMAGE_TYPES: List[str] = ["image/jpg", "image/jpeg", "image/png", "image/webp"]
+    ALLOWED_FILE_TYPES: str = ".jpg,.jpeg,.png,.pdf,.docx,.txt"  # Added this
+    
+    # CORS Settings
+    ALLOWED_ORIGINS: str = "*"  # Added this
 
     class Config:
         env_file = ".env"

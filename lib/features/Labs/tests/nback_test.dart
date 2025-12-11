@@ -22,12 +22,17 @@ class _NBackTestScreenState extends State<NBackTestScreen>
   late AnimationController _pulseController;
   late AnimationController _gridController;
 
-  // Test configuration
-  final int _nBack = 2; // 2-back test
+  // ==================== ADAPTIVE CONFIGURATION ====================
+  // Modified: _nBack is now a variable, starting at 1
+  int _nBack = 1; 
+  
+  // New: Block configuration
+  int _currentBlock = 1;
+  final int _totalBlocks = 3;
+  final int _trialsPerBlock = 15; // Trials per difficulty level
+  int _currentTrial = 0; // <--- ADD THIS LINE
+  // Practice settings
   final int _practiceTrials = 8;
-  final int _testTrials = 25;
-  final int _gridSize = 3; // 3x3 grid
-  int _currentTrial = 0;
   bool _isPractice = true;
 
   // Stimulus timing
@@ -44,12 +49,18 @@ class _NBackTestScreenState extends State<NBackTestScreen>
   DateTime? _stimulusStartTime;
 
   // Results tracking
-  int _hits = 0; // Correctly identified matches
-  int _misses = 0; // Missed matches
-  int _falseAlarms = 0; // Incorrectly pressed when no match
-  int _correctRejections = 0; // Correctly didn't press when no match
+  int _hits = 0;
+  int _misses = 0;
+  int _falseAlarms = 0;
+  int _correctRejections = 0;
   List<int> _reactionTimes = [];
   final List<Map<String, dynamic>> _trialResults = [];
+  
+  // New: Track block-specific accuracy for adaptation
+  int _blockHits = 0;
+  int _blockMisses = 0;
+  int _blockFalseAlarms = 0;
+  int _blockCorrectRejections = 0;
 
   // Timers
   Timer? _stimulusTimer;
@@ -58,7 +69,7 @@ class _NBackTestScreenState extends State<NBackTestScreen>
   // Random generator
   final math.Random _random = math.Random();
 
-  // Design colors
+  // Design colors (Same as before)
   static const Color bgColor = Color(0xFFF7F7F7);
   static const Color mintGreen = Color(0xFFB8E8D1);
   static const Color softLavender = Color(0xFFE8DFF0);
@@ -100,16 +111,17 @@ class _NBackTestScreenState extends State<NBackTestScreen>
     super.dispose();
   }
 
+  // ==================== UPDATED LOGIC ====================
+
   void _generateSequence(int length) {
     _sequence = [];
-    final positions = List.generate(9, (i) => i); // 0-8 positions
+    final positions = List.generate(9, (i) => i); 
     
     for (int i = 0; i < length; i++) {
+      // Use current _nBack variable
       if (i >= _nBack && _random.nextDouble() < 0.3) {
-        // 30% chance of match (same as N positions back)
         _sequence.add(_sequence[i - _nBack]);
       } else {
-        // Random position (avoiding match if not intended)
         int pos;
         do {
           pos = positions[_random.nextInt(positions.length)];
@@ -120,38 +132,53 @@ class _NBackTestScreenState extends State<NBackTestScreen>
   }
 
   bool _isMatch() {
+    // Current trial index relative to the sequence start
+    // Note: In blocks, we reset the sequence, so index is just the trial index
     if (_currentTrial < _nBack) return false;
     return _sequence[_currentTrial] == _sequence[_currentTrial - _nBack];
   }
 
   void _startPractice() {
+    _nBack = 1; // Practice always starts at 1-back
     _generateSequence(_practiceTrials);
     setState(() {
       _currentPhase = NBackPhase.practice;
       _isPractice = true;
       _currentTrial = 0;
-      _hits = 0;
-      _misses = 0;
-      _falseAlarms = 0;
-      _correctRejections = 0;
+      _resetMetrics();
     });
     _showNextStimulus();
   }
 
   void _startTest() {
-    _generateSequence(_testTrials);
+    _nBack = 1; // Test starts at 1-back and adapts
+    _currentBlock = 1;
+    _generateSequence(_trialsPerBlock); // Generate just for this block
+    
     setState(() {
       _currentPhase = NBackPhase.test;
       _isPractice = false;
       _currentTrial = 0;
-      _hits = 0;
-      _misses = 0;
-      _falseAlarms = 0;
-      _correctRejections = 0;
+      _resetMetrics();
+      _resetBlockMetrics();
       _reactionTimes = [];
       _trialResults.clear();
     });
     _showNextStimulus();
+  }
+
+  void _resetMetrics() {
+    _hits = 0;
+    _misses = 0;
+    _falseAlarms = 0;
+    _correctRejections = 0;
+  }
+  
+  void _resetBlockMetrics() {
+    _blockHits = 0;
+    _blockMisses = 0;
+    _blockFalseAlarms = 0;
+    _blockCorrectRejections = 0;
   }
 
   void _showNextStimulus() {
@@ -167,16 +194,16 @@ class _NBackTestScreenState extends State<NBackTestScreen>
     _pulseController.forward(from: 0);
     _gridController.forward(from: 0);
 
-    // Hide stimulus after duration
     _stimulusTimer = Timer(Duration(milliseconds: _stimulusDurationMs), () {
-      setState(() {
-        _showingStimulus = false;
-      });
+      if (mounted) {
+        setState(() {
+          _showingStimulus = false;
+        });
+      }
     });
 
-    // Response window
     _responseWindowTimer = Timer(Duration(milliseconds: _interStimulusIntervalMs), () {
-      _evaluateResponse();
+      if (mounted) _evaluateResponse();
     });
   }
 
@@ -192,9 +219,11 @@ class _NBackTestScreenState extends State<NBackTestScreen>
       
       if (_isMatch()) {
         _hits++;
+        _blockHits++;
         _lastResponseCorrect = true;
       } else {
         _falseAlarms++;
+        _blockFalseAlarms++;
         _lastResponseCorrect = false;
       }
 
@@ -208,67 +237,150 @@ class _NBackTestScreenState extends State<NBackTestScreen>
     final wasMatch = _isMatch();
     
     if (!_responded) {
-      // No response given
       if (wasMatch) {
         _misses++;
+        _blockMisses++;
         _lastResponseCorrect = false;
       } else {
         _correctRejections++;
+        _blockCorrectRejections++;
         _lastResponseCorrect = true;
       }
     }
 
     if (!_isPractice) {
       _trialResults.add({
-        'trial': _currentTrial + 1,
+        'trial': _trialResults.length + 1,
+        'block': _currentBlock,
+        'n_back_level': _nBack,
         'position': _currentPosition,
         'was_match': wasMatch,
         'responded': _responded,
         'correct': _lastResponseCorrect ?? false,
-        'reaction_time_ms': _responded ? _reactionTimes.last : null,
+        'reaction_time_ms': _responded && _reactionTimes.isNotEmpty ? _reactionTimes.last : null,
       });
     }
 
     setState(() {
-      _currentTrial++;
+      _currentTrial++; // Increment local trial counter
       _canRespond = false;
     });
 
-    final maxTrials = _isPractice ? _practiceTrials : _testTrials;
+    // Check if block or practice is finished
+    final maxTrials = _isPractice ? _practiceTrials : _trialsPerBlock;
     
     if (_currentTrial >= maxTrials) {
       if (_isPractice) {
+        // End Practice
         Future.delayed(const Duration(milliseconds: 500), _startTest);
       } else {
-        setState(() {
-          _currentPhase = NBackPhase.completed;
-        });
+        // End of a Test Block - Handle Adaptation
+        _handleBlockCompletion();
       }
     } else {
+      // Continue Block
       Future.delayed(const Duration(milliseconds: 300), _showNextStimulus);
     }
   }
 
+  // ==================== NEW: ADAPTIVE LOGIC ====================
+  
+  void _handleBlockCompletion() {
+    if (_currentBlock >= _totalBlocks) {
+      // All blocks done
+      setState(() {
+        _currentPhase = NBackPhase.completed;
+      });
+      return;
+    }
+
+    // Calculate accuracy for this specific block
+    final blockTotal = _blockHits + _blockMisses + _blockFalseAlarms + _blockCorrectRejections;
+    final blockAccuracy = (_blockHits + _blockCorrectRejections) / blockTotal;
+    
+    String levelMessage = "Keeping at $_nBack-Back";
+    Color levelColor = blueAccent;
+    IconData levelIcon = Icons.remove; // No change
+
+    // ADAPTATION LOGIC
+    int newNBack = _nBack;
+    
+    if (blockAccuracy > 0.8) {
+      // Level Up
+      newNBack++;
+      levelMessage = "Level Up! Now ${newNBack}-Back";
+      levelColor = greenAccent;
+      levelIcon = Icons.arrow_upward;
+    } else if (blockAccuracy < 0.5 && _nBack > 1) {
+      // Level Down
+      newNBack--;
+      levelMessage = "Easing down. Now ${newNBack}-Back";
+      levelColor = orangeAccent;
+      levelIcon = Icons.arrow_downward;
+    }
+
+    // Show Level Change Dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(levelIcon, color: levelColor),
+            const SizedBox(width: 10),
+            Text('Block ${_currentBlock} Complete'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Accuracy: ${(blockAccuracy * 100).toStringAsFixed(0)}%'),
+            const SizedBox(height: 10),
+            Text(
+              levelMessage, 
+              style: TextStyle(color: levelColor, fontWeight: FontWeight.bold, fontSize: 16)
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // Prepare next block after delay
+    Future.delayed(const Duration(seconds: 2), () {
+      Navigator.of(context, rootNavigator: true).pop(); // Close dialog
+      
+      setState(() {
+        _nBack = newNBack;
+        _currentBlock++;
+        _currentTrial = 0; // Reset trial counter for new block
+        _resetBlockMetrics();
+      });
+      
+      // Generate NEW sequence for the new difficulty
+      _generateSequence(_trialsPerBlock);
+      _showNextStimulus();
+    });
+  }
+
   Map<String, dynamic> _getTestData() {
     final totalMatches = _hits + _misses;
-    final totalNonMatches = _falseAlarms + _correctRejections;
-    final accuracy = (_hits + _correctRejections) / _testTrials;
+    final totalTrials = _trialsPerBlock * _totalBlocks; // Approximation
+    final accuracy = (_hits + _correctRejections) / _trialResults.length; // Use actual count
     final avgRT = _reactionTimes.isNotEmpty 
         ? _reactionTimes.reduce((a, b) => a + b) / _reactionTimes.length 
         : 0.0;
     
     return {
-      'test_type': 'nback',
-      'n_back_level': _nBack,
-      'total_trials': _testTrials,
+      'test_type': 'nback_adaptive',
+      'max_n_reached': _nBack, // The level they ended on
+      'total_trials': _trialResults.length,
       'hits': _hits,
       'misses': _misses,
       'false_alarms': _falseAlarms,
       'correct_rejections': _correctRejections,
       'accuracy': accuracy,
-      'hit_rate': totalMatches > 0 ? _hits / totalMatches : 0,
       'avg_reaction_time_ms': avgRT,
-      'reaction_times': _reactionTimes,
       'trials': _trialResults,
       'completed': true,
     };
@@ -358,18 +470,24 @@ class _NBackTestScreenState extends State<NBackTestScreen>
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: orangeAccent.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '$_nBack-Back',
-              style: const TextStyle(
-                color: orangeAccent,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+          // DYNAMIC LEVEL BADGE
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: Container(
+              key: ValueKey(_nBack), // Animate when N changes
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: orangeAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: orangeAccent.withOpacity(0.3)),
+              ),
+              child: Text(
+                '$_nBack-Back', // Shows current Level
+                style: const TextStyle(
+                  color: orangeAccent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ),
@@ -385,7 +503,8 @@ class _NBackTestScreenState extends State<NBackTestScreen>
       case NBackPhase.practice:
         return 'Practice round - Trial ${_currentTrial + 1}/$_practiceTrials';
       case NBackPhase.test:
-        return 'Trial ${_currentTrial + 1}/$_testTrials';
+        // Shows Block info
+        return 'Block $_currentBlock/$_totalBlocks - Trial ${_currentTrial + 1}/$_trialsPerBlock';
       case NBackPhase.completed:
         return 'Test completed';
     }
@@ -394,9 +513,12 @@ class _NBackTestScreenState extends State<NBackTestScreen>
   Widget _buildProgressBar() {
     double progress = 0;
     if (_currentPhase == NBackPhase.practice) {
-      progress = _currentTrial / _practiceTrials * 0.2;
+      progress = _currentTrial / _practiceTrials * 0.1;
     } else if (_currentPhase == NBackPhase.test) {
-      progress = 0.2 + (_currentTrial / _testTrials * 0.8);
+      // Calculate total progress based on blocks
+      int totalTrialsCompleted = ((_currentBlock - 1) * _trialsPerBlock) + _currentTrial;
+      int totalTrialsTotal = _totalBlocks * _trialsPerBlock;
+      progress = 0.1 + (totalTrialsCompleted / totalTrialsTotal * 0.9);
     } else if (_currentPhase == NBackPhase.completed) {
       progress = 1.0;
     }
@@ -410,7 +532,7 @@ class _NBackTestScreenState extends State<NBackTestScreen>
       ),
       child: FractionallySizedBox(
         alignment: Alignment.centerLeft,
-        widthFactor: progress,
+        widthFactor: progress.clamp(0.0, 1.0),
         child: Container(
           decoration: BoxDecoration(
             gradient: const LinearGradient(colors: [orangeAccent, redAccent]),
@@ -421,179 +543,15 @@ class _NBackTestScreenState extends State<NBackTestScreen>
     );
   }
 
-  Widget _buildContent() {
-    return Container(
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: _buildPhaseContent(),
-    );
-  }
-
-  Widget _buildPhaseContent() {
-    switch (_currentPhase) {
-      case NBackPhase.instructions:
-        return _buildInstructionsPhase();
-      case NBackPhase.practice:
-      case NBackPhase.test:
-        return _buildTestPhase();
-      case NBackPhase.completed:
-        return _buildCompletedPhase();
-    }
-  }
-
-  Widget _buildInstructionsPhase() {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const SizedBox(height: 10),
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: orangeAccent.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.grid_3x3_rounded, color: orangeAccent, size: 40),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            '2-Back Memory Test',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Test your working memory',
-            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 20),
-          // Mini grid example
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                const Text(
-                  'Watch the grid:',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: 100,
-                  height: 100,
-                  child: _buildMiniGrid(4), // Example position
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Press "MATCH" if the position is the same\nas 2 steps ago',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: softLavender.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              children: [
-                _buildInstructionRow(Icons.visibility, 'Watch where the square appears'),
-                const SizedBox(height: 8),
-                _buildInstructionRow(Icons.history, 'Remember the position from 2 steps back'),
-                const SizedBox(height: 8),
-                _buildInstructionRow(Icons.touch_app, 'Tap MATCH if positions are the same'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          GestureDetector(
-            onTap: _startPractice,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-              decoration: BoxDecoration(
-                color: orangeAccent,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: orangeAccent.withOpacity(0.4),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22),
-                  SizedBox(width: 8),
-                  Text(
-                    'Start Practice',
-                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInstructionRow(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, color: Colors.grey[600], size: 18),
-        const SizedBox(width: 10),
-        Expanded(child: Text(text, style: TextStyle(fontSize: 12, color: Colors.grey[700]))),
-      ],
-    );
-  }
-
-  Widget _buildMiniGrid(int highlightPosition) {
-    return GridView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 4,
-        mainAxisSpacing: 4,
-      ),
-      itemCount: 9,
-      itemBuilder: (context, index) {
-        final isHighlighted = index == highlightPosition;
-        return Container(
-          decoration: BoxDecoration(
-            color: isHighlighted ? orangeAccent : Colors.grey[200],
-            borderRadius: BorderRadius.circular(6),
-          ),
-        );
-      },
-    );
-  }
-
+  // ... (Rest of UI widgets: _buildContent, _buildInstructionsPhase, etc. remain the same)
+  
+  // NOTE: Ensure _buildTestPhase uses _nBack in the hint text:
   Widget _buildTestPhase() {
     return Column(
       children: [
-        // Feedback indicator
+        // Feedback indicator (Same as before)
         if (_lastResponseCorrect != null)
-          Container(
+           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: _lastResponseCorrect! 
@@ -629,7 +587,7 @@ class _NBackTestScreenState extends State<NBackTestScreen>
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              _isPractice ? '🎯 Practice' : '📝 Test',
+              _isPractice ? '🎯 Practice (1-Back)' : '📝 Test (Adaptive)',
               style: TextStyle(
                 color: _isPractice ? Colors.orange : blueAccent,
                 fontSize: 13,
@@ -650,7 +608,7 @@ class _NBackTestScreenState extends State<NBackTestScreen>
             ),
           ),
         ),
-        // Match hint
+        // DYNAMIC HINT
         if (_currentTrial >= _nBack)
           Text(
             'Same as $_nBack positions ago?',
@@ -661,6 +619,88 @@ class _NBackTestScreenState extends State<NBackTestScreen>
     );
   }
 
+  // ... (_buildGrid, _buildBottomSection, _buildMetricsBar, etc. remain unchanged)
+
+  // Just ensure _buildCompletedPhase shows the correct final N level
+  Widget _buildCompletedPhase() {
+    final data = _getTestData();
+    final accuracy = (data['accuracy'] * 100).toStringAsFixed(0);
+    final maxN = data['max_n_reached'];
+
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: greenAccent.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check_circle_rounded, color: greenAccent, size: 45),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Test Completed!',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: mintGreen.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                _buildResultRow('Highest Level Reached', '$maxN-Back'), // New Stat
+                const Divider(height: 20),
+                _buildResultRow('Overall Accuracy', '$accuracy%'),
+                const Divider(height: 20),
+                _buildResultRow('Hits / Misses', '$_hits / $_misses'),
+                const Divider(height: 20),
+                _buildResultRow('False Alarms', '$_falseAlarms'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: _completeTest,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+              decoration: BoxDecoration(
+                color: greenAccent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text('Continue', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ),
+    );
+  }
+  
+  // Helper for UI
+  Widget _buildInstructionRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.grey[600], size: 18),
+        const SizedBox(width: 10),
+        Expanded(child: Text(text, style: TextStyle(fontSize: 12, color: Colors.grey[700]))),
+      ],
+    );
+  }
+
+  // Grid builder
   Widget _buildGrid() {
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
@@ -803,12 +843,18 @@ class _NBackTestScreenState extends State<NBackTestScreen>
     );
   }
 
-  Widget _buildCompletedPhase() {
-    final data = _getTestData();
-    final accuracy = (data['accuracy'] * 100).toStringAsFixed(0);
-    final hitRate = (data['hit_rate'] * 100).toStringAsFixed(0);
-    final avgRT = (data['avg_reaction_time_ms'] as double).toStringAsFixed(0);
-
+  Widget _buildResultRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+      ],
+    );
+  }
+  
+  // Needed for instructions phase - copied from original
+  Widget _buildInstructionsPhase() {
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -817,52 +863,76 @@ class _NBackTestScreenState extends State<NBackTestScreen>
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: greenAccent.withOpacity(0.1),
+              color: orangeAccent.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check_circle_rounded, color: greenAccent, size: 45),
+            child: const Icon(Icons.grid_3x3_rounded, color: orangeAccent, size: 40),
           ),
           const SizedBox(height: 20),
           const Text(
-            'Test Completed!',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            'Adaptive N-Back',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 8),
+          Text(
+            'Test adjusts to your skill level',
+            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+          ),
+          // ... (Rest of instructions UI same as original)
+           const SizedBox(height: 20),
+          // Mini grid example
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: mintGreen.withOpacity(0.2),
+              color: Colors.grey[50],
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
               children: [
-                _buildResultRow('Overall Accuracy', '$accuracy%'),
-                const Divider(height: 20),
-                _buildResultRow('Hit Rate', '$hitRate%'),
-                const Divider(height: 20),
-                _buildResultRow('Hits / Misses', '$_hits / $_misses'),
-                const Divider(height: 20),
-                _buildResultRow('False Alarms', '$_falseAlarms'),
-                const Divider(height: 20),
-                _buildResultRow('Avg Reaction Time', '${avgRT}ms'),
+                const Text(
+                  'Watch the grid:',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: 100,
+                  height: 100,
+                  child: _buildMiniGrid(4), // Example position
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Start at 1-Back (same as previous).\nIf you do well, it gets harder!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 24),
           GestureDetector(
-            onTap: _completeTest,
+            onTap: _startPractice,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
               decoration: BoxDecoration(
-                color: greenAccent,
+                color: orangeAccent,
                 borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: orangeAccent.withOpacity(0.4),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                  Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22),
                   SizedBox(width: 8),
-                  Text('Continue', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text(
+                    'Start Practice',
+                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
                 ],
               ),
             ),
@@ -873,13 +943,55 @@ class _NBackTestScreenState extends State<NBackTestScreen>
     );
   }
 
-  Widget _buildResultRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-      ],
+  Widget _buildMiniGrid(int highlightPosition) {
+    return GridView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 4,
+        mainAxisSpacing: 4,
+      ),
+      itemCount: 9,
+      itemBuilder: (context, index) {
+        final isHighlighted = index == highlightPosition;
+        return Container(
+          decoration: BoxDecoration(
+            color: isHighlighted ? orangeAccent : Colors.grey[200],
+            borderRadius: BorderRadius.circular(6),
+          ),
+        );
+      },
     );
+  }
+
+  Widget _buildContent() {
+    return Container(
+      margin: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: _buildPhaseContent(),
+    );
+  }
+
+  Widget _buildPhaseContent() {
+    switch (_currentPhase) {
+      case NBackPhase.instructions:
+        return _buildInstructionsPhase();
+      case NBackPhase.practice:
+      case NBackPhase.test:
+        return _buildTestPhase();
+      case NBackPhase.completed:
+        return _buildCompletedPhase();
+    }
   }
 }

@@ -4,12 +4,12 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class ApiService {
   // ============== BASE URL CONFIGURATION ==============
   // Automatically selects correct URL based on platform
   static String get baseUrl {
-  const backendIP = '10.54.16.25:8000';   // <---- YOUR WORKING IP
+  const backendIP = '10.100.27.14:8000';   // <---- YOUR WORKING IP
 
   if (kIsWeb) {
     // Flutter Web uses browser → needs direct IP
@@ -27,7 +27,7 @@ class ApiService {
 }
 
   static const String apiVersion = '/api/v1';
-
+static const _storage = FlutterSecureStorage();
   // ============== TOKEN MANAGEMENT ==============
   static String? _accessToken;
   static String? _refreshToken;
@@ -55,6 +55,7 @@ class ApiService {
   }
 
   static bool get isLoggedIn => _accessToken != null;
+
 
   static Map<String, String> get _headers => {
         'Content-Type': 'application/json',
@@ -578,6 +579,39 @@ class ApiService {
     }
   }
 
+
+  /// Save wellness goals
+  static Future<Map<String, dynamic>> saveWellnessGoals({
+    required Map<String, double> goals,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl$apiVersion/wellness/goals'),
+        headers: _headers,
+        body: jsonEncode({
+          'screen_time_goal': goals['screen_time'],
+          'sleep_goal': goals['sleep'],
+          'gaming_goal': goals['gaming'],
+        }),
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed: $e'};
+    }
+  }
+
+  /// Get wellness goals
+  static Future<Map<String, dynamic>> getWellnessGoals() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl$apiVersion/wellness/goals'),
+        headers: _headers,
+      );
+      return _handleResponse(response);
+    } catch (e) {
+      return {'success': false, 'error': 'Connection failed: $e'};
+    }
+  }
   // ============== REPORT ENDPOINTS ==============
 
   /// List reports
@@ -778,4 +812,977 @@ class ApiService {
       return {'success': false, 'error': 'Connection failed: $e'};
     }
   }
+
+// ============================================================
+// DOCTOR API SERVICE METHODS
+// ============================================================
+// Add these methods to your existing ApiService class in api_service.dart
+// Uses: http package + baseUrl (same as your existing pattern)
+// ============================================================
+
+// ==================== DOCTOR AUTH ====================
+
+/// Doctor login
+static Future<Map<String, dynamic>> doctorLogin({
+  required String email,
+  required String password,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/doctors/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email,
+        'password': password,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      // Store tokens
+      await _storage.write(key: 'access_token', value: data['access_token']);
+      await _storage.write(key: 'refresh_token', value: data['refresh_token']);
+      await _storage.write(key: 'user_type', value: 'doctor');
+
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Login failed'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
 }
+
+/// Doctor forgot password
+static Future<Map<String, dynamic>> doctorForgotPassword({
+  required String email,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/doctors/forgot-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'message': data['message']};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Request failed'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Doctor reset password
+static Future<Map<String, dynamic>> doctorResetPassword({
+  required String email,
+  required String otp,
+  required String newPassword,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/doctors/reset-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email,
+        'otp': otp,
+        'new_password': newPassword,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'message': 'Password reset successfully'};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Reset failed'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+// ==================== DOCTOR PROFILE ====================
+
+/// Get doctor profile
+static Future<Map<String, dynamic>> getDoctorProfile() async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/doctors/me'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to get profile'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Update doctor profile
+static Future<Map<String, dynamic>> updateDoctorProfile({
+  String? firstName,
+  String? lastName,
+  String? phone,
+  String? hospitalAffiliation,
+  String? department,
+  String? bio,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final Map<String, dynamic> body = {};
+    if (firstName != null) body['first_name'] = firstName;
+    if (lastName != null) body['last_name'] = lastName;
+    if (phone != null) body['phone'] = phone;
+    if (hospitalAffiliation != null) body['hospital_affiliation'] = hospitalAffiliation;
+    if (department != null) body['department'] = department;
+    if (bio != null) body['bio'] = bio;
+
+    final response = await http.patch(
+      Uri.parse('$baseUrl/api/v1/doctors/me'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(body),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Update failed'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+// ==================== DOCTOR DASHBOARD ====================
+
+/// Get doctor dashboard
+static Future<Map<String, dynamic>> getDoctorDashboard() async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/doctors/dashboard'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to get dashboard'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+// ==================== PATIENTS ====================
+
+/// List patients with filters
+static Future<Map<String, dynamic>> getPatientsList({
+  String? search,
+  String? riskLevel,
+  int? ageMin,
+  int? ageMax,
+  String sortBy = 'last_test_date',
+  String sortOrder = 'desc',
+  int page = 1,
+  int limit = 20,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final queryParams = <String, String>{
+      'sort_by': sortBy,
+      'sort_order': sortOrder,
+      'page': page.toString(),
+      'limit': limit.toString(),
+    };
+
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+    if (riskLevel != null) queryParams['risk_level'] = riskLevel;
+    if (ageMin != null) queryParams['age_min'] = ageMin.toString();
+    if (ageMax != null) queryParams['age_max'] = ageMax.toString();
+
+    final uri = Uri.parse('$baseUrl/api/v1/doctors/patients').replace(queryParameters: queryParams);
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to get patients'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Get patient detail
+static Future<Map<String, dynamic>> getPatientDetail(String patientId) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/doctors/patients/$patientId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Patient not found'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+// ==================== CLINICAL NOTES ====================
+
+/// Create clinical note
+static Future<Map<String, dynamic>> createClinicalNote({
+  required String patientId,
+  required String title,
+  required String content,
+  String noteType = 'general',
+  String? relatedSessionId,
+  String? relatedReportId,
+  bool isPrivate = false,
+  bool isFlagged = false,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/doctors/notes'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'patient_id': patientId,
+        'title': title,
+        'content': content,
+        'note_type': noteType,
+        'related_session_id': relatedSessionId,
+        'related_report_id': relatedReportId,
+        'is_private': isPrivate,
+        'is_flagged': isFlagged,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to create note'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Get clinical notes list
+static Future<Map<String, dynamic>> getClinicalNotes({
+  String? patientId,
+  String? noteType,
+  bool flaggedOnly = false,
+  int page = 1,
+  int limit = 20,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'limit': limit.toString(),
+      'flagged_only': flaggedOnly.toString(),
+    };
+
+    if (patientId != null) queryParams['patient_id'] = patientId;
+    if (noteType != null) queryParams['note_type'] = noteType;
+
+    final uri = Uri.parse('$baseUrl/api/v1/doctors/notes').replace(queryParameters: queryParams);
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to get notes'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Update clinical note
+static Future<Map<String, dynamic>> updateClinicalNote({
+  required String noteId,
+  String? title,
+  String? content,
+  String? noteType,
+  bool? isPrivate,
+  bool? isFlagged,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final Map<String, dynamic> body = {};
+    if (title != null) body['title'] = title;
+    if (content != null) body['content'] = content;
+    if (noteType != null) body['note_type'] = noteType;
+    if (isPrivate != null) body['is_private'] = isPrivate;
+    if (isFlagged != null) body['is_flagged'] = isFlagged;
+
+    final response = await http.patch(
+      Uri.parse('$baseUrl/api/v1/doctors/notes/$noteId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(body),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to update note'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Delete clinical note
+static Future<Map<String, dynamic>> deleteClinicalNote(String noteId) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/api/v1/doctors/notes/$noteId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'message': 'Note deleted'};
+    }
+
+    final data = jsonDecode(response.body);
+    return {'success': false, 'error': data['detail'] ?? 'Failed to delete note'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+// ==================== ALERTS ====================
+
+/// Get doctor alerts
+static Future<Map<String, dynamic>> getDoctorAlerts() async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/doctors/alerts'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to get alerts'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+// ==================== DATASET REQUESTS ====================
+
+/// Create dataset request
+static Future<Map<String, dynamic>> createDatasetRequest({
+  required String purpose,
+  String? researchTitle,
+  String? institution,
+  List<String> dataTypes = const ['cognitive', 'motor', 'speech', 'gait', 'facial'],
+  DateTime? dateRangeStart,
+  DateTime? dateRangeEnd,
+  int minSamples = 100,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/doctors/dataset-requests'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'purpose': purpose,
+        'research_title': researchTitle,
+        'institution': institution,
+        'data_types': dataTypes,
+        'date_range_start': dateRangeStart?.toIso8601String(),
+        'date_range_end': dateRangeEnd?.toIso8601String(),
+        'min_samples': minSamples,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to create request'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Get dataset requests
+static Future<Map<String, dynamic>> getDatasetRequests() async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/doctors/dataset-requests'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to get requests'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+// ==================== ADMIN AUTH ====================
+
+/// Admin login
+static Future<Map<String, dynamic>> adminLogin({
+  required String email,
+  required String password,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/admin/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email,
+        'password': password,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      await _storage.write(key: 'access_token', value: data['access_token']);
+      await _storage.write(key: 'refresh_token', value: data['refresh_token']);
+      await _storage.write(key: 'user_type', value: 'admin');
+
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Login failed'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+// ==================== HELPERS ====================
+
+/// Get current user type (user, doctor, admin)
+static Future<String?> getUserType() async {
+  return await _storage.read(key: 'user_type');
+}
+
+/// Clear all auth data (logout for any user type)
+static Future<void> clearAuthData() async {
+  await _storage.delete(key: 'access_token');
+  await _storage.delete(key: 'refresh_token');
+  await _storage.delete(key: 'user_type');
+}
+
+  // ==================== DOCTOR PROFILE API METHODS ====================
+// Add these methods to your existing ApiService class
+
+ 
+
+// ==================== ADMIN DASHBOARD ====================
+
+/// Get admin dashboard
+static Future<Map<String, dynamic>> getAdminDashboard() async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/admin/dashboard'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to get dashboard'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+} 
+  
+  static Future<Map<String, dynamic>> getAdminUsersList({
+  String? search,
+  bool? isVerified,
+  int page = 1,
+  int limit = 20,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'limit': limit.toString(),
+    };
+
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+    if (isVerified != null) queryParams['is_verified'] = isVerified.toString();
+
+    final uri = Uri.parse('$baseUrl/api/v1/admin/users').replace(queryParameters: queryParams);
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to get users'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Get doctors list
+static Future<Map<String, dynamic>> getAdminDoctorsList({
+  String? search,
+  String? status,
+  int page = 1,
+  int limit = 20,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'limit': limit.toString(),
+    };
+
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+    if (status != null) queryParams['status'] = status;
+
+    final uri = Uri.parse('$baseUrl/api/v1/admin/doctors').replace(queryParameters: queryParams);
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to get doctors'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+static Future<Map<String, dynamic>> verifyDoctor({
+  required String doctorId,
+  required bool approve,
+  String? rejectionReason,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/admin/doctors/verify'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'doctor_id': doctorId,
+        'approve': approve,
+        'rejection_reason': rejectionReason,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'message': data['message']};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Verification failed'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+// ==================== SUPPORT TICKETS ====================
+
+/// Get support tickets
+static Future<Map<String, dynamic>> getAdminTickets({
+  String? status,
+  String? priority,
+  int page = 1,
+  int limit = 20,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'limit': limit.toString(),
+    };
+
+    if (status != null) queryParams['status'] = status;
+    if (priority != null) queryParams['priority'] = priority;
+
+    final uri = Uri.parse('$baseUrl/api/v1/admin/tickets').replace(queryParameters: queryParams);
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to get tickets'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Get ticket detail
+static Future<Map<String, dynamic>> getAdminTicketDetail(String ticketId) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/v1/admin/tickets/$ticketId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Ticket not found'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Assign ticket
+static Future<Map<String, dynamic>> assignTicket({
+  required String ticketId,
+  String? adminId,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/admin/tickets/assign'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'ticket_id': ticketId,
+        'admin_id': adminId,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'message': 'Ticket assigned'};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Assignment failed'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Resolve ticket
+static Future<Map<String, dynamic>> resolveTicket({
+  required String ticketId,
+  required String resolutionNotes,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/admin/tickets/resolve'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'ticket_id': ticketId,
+        'resolution_notes': resolutionNotes,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'message': 'Ticket resolved'};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Resolution failed'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Reply to ticket
+static Future<Map<String, dynamic>> replyToTicket({
+  required String ticketId,
+  required String message,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/admin/tickets/reply'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'ticket_id': ticketId,
+        'message': message,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'message': 'Reply sent'};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Reply failed'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+// ==================== PERMISSIONS ====================
+
+/// Get permissions list
+static Future<Map<String, dynamic>> getAdminPermissions({
+  String? granteeType,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final queryParams = <String, String>{};
+    if (granteeType != null) queryParams['grantee_type'] = granteeType;
+
+    final uri = Uri.parse('$baseUrl/api/v1/admin/permissions').replace(queryParameters: queryParams);
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': data};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Failed to get permissions'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Grant permission
+static Future<Map<String, dynamic>> grantPermission({
+  required String granteeType,
+  required String granteeId,
+  required String permissionType,
+  String? resourceType,
+  int? expiresInDays,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/admin/permissions/grant'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'grantee_type': granteeType,
+        'grantee_id': granteeId,
+        'permission_type': permissionType,
+        'resource_type': resourceType,
+        'expires_in_days': expiresInDays,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'message': 'Permission granted'};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Grant failed'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+
+/// Revoke permission
+static Future<Map<String, dynamic>> revokePermission({
+  required String permissionId,
+  required String reason,
+}) async {
+  try {
+    final token = await _storage.read(key: 'access_token');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/admin/permissions/revoke'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'permission_id': permissionId,
+        'reason': reason,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'message': 'Permission revoked'};
+    }
+
+    return {'success': false, 'error': data['detail'] ?? 'Revoke failed'};
+  } catch (e) {
+    return {'success': false, 'error': e.toString()};
+  }
+}
+ 
+
+  
+}
+

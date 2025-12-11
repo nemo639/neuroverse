@@ -91,7 +91,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> with Ticker
     return true;
   }
 
-  Future<void> _handleSendResetLink() async {
+  // ==========================================
+// REPLACE THIS METHOD IN forgot_password_screen.dart
+// ==========================================
+
+Future<void> _handleSendResetLink() async {
   HapticFeedback.mediumImpact();
   
   if (_validateEmail(emailController.text.trim())) {
@@ -105,13 +109,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> with Ticker
     setState(() => isLoading = false);
     
     if (result['success']) {
-      // Navigate to OTP screen for password reset
+      // Navigate directly to Reset Password screen (OTP + New Password)
       Navigator.pushNamed(
         context,
-        '/otp-verification',
+        '/reset-password',  // Changed from '/otp-verification'
         arguments: {
           'email': emailController.text.trim(),
-          'type': 'forgot_password',
         },
       );
     } else {

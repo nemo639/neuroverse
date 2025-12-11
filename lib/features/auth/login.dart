@@ -102,6 +102,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 /// Main email validation function
 /// Returns true if valid, false if invalid
 /// Sets emailError state with specific error message
+/// 
+
+
 bool _validateEmail(String email) {
   // Trim whitespace
   email = email.trim().toLowerCase();
@@ -697,6 +700,8 @@ bool _validateEmailSimple(String email) {
     );
   }
 
+    
+
   Widget _buildLoginForm() {
     return _buildAnimatedWidget(
       delay: 0.2,
@@ -997,126 +1002,232 @@ bool _validateEmailSimple(String email) {
   }
 
   Widget _buildSocialSection() {
-    return _buildAnimatedWidget(
-      delay: 0.3,
-      child: Column(
-        children: [
-          // Divider with text
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 1,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.1),
-                      ],
-                    ),
+  return _buildAnimatedWidget(
+    delay: 0.3,
+    child: Column(
+      children: [
+        // Divider with text
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.1),
+                    ],
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  "Or continue with",
-                  style: TextStyle(
-                    color: Colors.black.withOpacity(0.4),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  height: 1,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.black.withOpacity(0.1),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 24),
-          
-          // Social Buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildSocialButton(
-                child: _buildGoogleLogo(),
-                onTap: () => _handleSocialLogin('Google'),
-              ),
-              const SizedBox(width: 16),
-              _buildSocialButton(
-                child: _buildAppleLogo(),
-                backgroundColor: Colors.black,
-                onTap: () => _handleSocialLogin('Apple'),
-              ),
-              const SizedBox(width: 16),
-              _buildSocialButton(
-                child: _buildFacebookLogo(),
-                backgroundColor: const Color(0xFF1877F2),
-                onTap: () => _handleSocialLogin('Facebook'),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 32),
-          
-          // Sign Up Link
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                "Don't have an account? ",
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                "Or continue with",
                 style: TextStyle(
-                  color: Colors.black.withOpacity(0.5),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  color: Colors.black.withOpacity(0.4),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              GestureDetector(
+            ),
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.black.withOpacity(0.1),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        
+        const SizedBox(height: 24),
+        
+        // Social Buttons
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildSocialButton(
+              child: _buildGoogleLogo(),
+              onTap: () => _handleSocialLogin('Google'),
+            ),
+            const SizedBox(width: 16),
+            _buildSocialButton(
+              child: _buildAppleLogo(),
+              backgroundColor: Colors.black,
+              onTap: () => _handleSocialLogin('Apple'),
+            ),
+            const SizedBox(width: 16),
+            _buildSocialButton(
+              child: _buildFacebookLogo(),
+              backgroundColor: const Color(0xFF1877F2),
+              onTap: () => _handleSocialLogin('Facebook'),
+            ),
+          ],
+        ),
+        
+        const SizedBox(height: 32),
+        
+        // Sign Up Link
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "Don't have an account? ",
+              style: TextStyle(
+                color: Colors.black.withOpacity(0.5),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SignUpScreen()),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: darkCard,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                child: const Text(
+                  "Sign Up",
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        
+        // ==================== DOCTOR & ADMIN SIGN-IN ====================
+        const SizedBox(height: 28),
+        
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 1,
+                color: Colors.black.withOpacity(0.08),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Healthcare Professional?',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black.withOpacity(0.4),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Container(
+                height: 1,
+                color: Colors.black.withOpacity(0.08),
+              ),
+            ),
+          ],
+        ),
+        
+        const SizedBox(height: 20),
+        
+        Row(
+          children: [
+            Expanded(
+              child: _buildProfessionalButton(
+                icon: Icons.medical_services_rounded,
+                label: 'Sign in as Doctor',
+                color: const Color(0xFF0D9488),
                 onTap: () {
                   HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SignUpScreen()),
-                  );
+                  Navigator.pushNamed(context, '/doctor-login');
                 },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: darkCard,
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                  child: const Text(
-                    "Sign Up",
-                    style: TextStyle(
-                      color: Colors.black87,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
               ),
-            ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildProfessionalButton(
+                icon: Icons.admin_panel_settings_rounded,
+                label: 'Continue as Admin',
+                color: const Color(0xFF7C3AED),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pushNamed(context, '/admin-login');
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+// Helper method for professional buttons
+Widget _buildProfessionalButton({
+  required IconData icon,
+  required String label,
+  required Color color,
+  required VoidCallback onTap,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: color.withOpacity(0.3),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-    );
-  }
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
   Widget _buildSocialButton({
     required Widget child,
@@ -1338,4 +1449,7 @@ class GoogleLogoPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+
+  
 }
+

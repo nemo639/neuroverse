@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neuroverse/features/Home/admin_home_screen.dart';
 import 'package:neuroverse/features/Home/home.dart';
+import 'package:neuroverse/features/Profile/doctor_edit_profile_screen.dart';
+import 'package:neuroverse/features/Profile/doctor_profile_screen.dart';
+import 'package:neuroverse/features/auth/admin_login_screen.dart';
+import 'package:neuroverse/features/auth/doctor-login.dart';
+import 'package:neuroverse/features/Home/doctor-home.dart';
 import 'package:neuroverse/features/auth/login.dart';
 import 'package:neuroverse/features/auth/register.dart';
 import 'package:neuroverse/features/auth/forgot_password_screen.dart';
+import 'package:neuroverse/features/auth/reset_password_screen.dart';
 import 'package:neuroverse/features/auth/otp-verification.dart';
 import 'package:neuroverse/features/profile/profile.dart';
 import 'package:neuroverse/features/profile/edit_profile.dart';
@@ -57,6 +64,7 @@ class MyApp extends StatelessWidget {
         '/': (context) => const LoginScreen(),
         '/register': (context) => const SignUpScreen(),
         '/forgot-password': (context) => const ForgotPasswordScreen(),
+        '/reset-password': (context) => const ResetPasswordScreen(),
         '/otp-verification': (context) {
           final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
           return OTPVerificationScreen(
@@ -75,13 +83,19 @@ class MyApp extends StatelessWidget {
         '/test/story-recall-test': (context) => const StoryRecallTestScreen(),
         '/test/sustained-vowel-test': (context) => const SustainedVowelTestScreen(),
         '/test/picture-description-test': (context) => const PictureDescriptionTestScreen(),
+        '/doctor-profile': (context) => const DoctorProfileScreen(),
+        '/doctor-edit-profile': (context) => const DoctorEditProfileScreen(),
         // Routes
+        '/doctor-login': (context) => const DoctorLoginScreen(),
+        '/doctor-home': (context) => const DoctorHomeScreen(),
         '/test/stroop-test': (context) => const StroopTestScreen(),
         '/test/nback-test': (context) => const NBackTestScreen(),
         '/test/word-recall-test': (context) => const WordRecallTestScreen(),
         '/test/finger-tapping-test': (context) => const FingerTappingTestScreen(),
         '/test/spiral-drawing-test': (context) => const SpiralDrawingTestScreen(),
         '/test/gait_assessment_test': (context) => const GaitAssessmentTestScreen(),
+        '/admin-login': (context) => const AdminLoginScreen(),
+        '/admin-home': (context) => const AdminHomeScreen(),
         '/reports': (context) => const ReportsScreen(),
         '/XAI': (context) => const XAIScreen(),
       },

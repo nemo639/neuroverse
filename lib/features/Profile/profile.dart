@@ -594,66 +594,257 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.55,
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(2),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Container(
+          height: MediaQuery.of(context).size.height * 0.65,
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Privacy & Security',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: Colors.black87,
+              const SizedBox(height: 20),
+              const Text(
+                'Privacy & Security',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black87,
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            Expanded(
-              child: ListView(
-                children: [
-                  _buildPrivacyOptionWithAction(
-                    Icons.fingerprint_rounded, 
-                    'Biometric Login', 
-                    'Use fingerprint or face ID',
-                    onTap: () => _showComingSoonDialog('Biometric Login'),
-                  ),
-                  _buildPrivacyOptionWithAction(
-                    Icons.lock_outline_rounded, 
-                    'Change Password', 
-                    'Update your password',
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.pushNamed(context, '/change-password');
-                    },
-                  ),
-                  _buildPrivacyOptionWithAction(
-                    Icons.delete_outline_rounded, 
-                    'Delete Account', 
-                    'Permanently remove your data',
-                    onTap: () => _showDeleteAccountDialog(),
-                    isDestructive: true,
-                  ),
-                ],
+              const SizedBox(height: 24),
+              Expanded(
+                child: ListView(
+                  children: [
+                    _buildPrivacyToggle(
+                      Icons.visibility_off_rounded,
+                      'Hide Sensitive Data',
+                      'Blur test scores and results',
+                      _hideSensitiveData,
+                      (value) {
+                        setSheetState(() => _hideSensitiveData = value);
+                        setState(() {});
+                        _showSettingSavedSnackbar('Sensitive data ${value ? 'hidden' : 'visible'}');
+                      },
+                    ),
+                    _buildPrivacyToggle(
+                      Icons.screenshot_rounded,
+                      'Screen Security',
+                      'Prevent screenshots in app',
+                      _screenSecurityEnabled,
+                      (value) {
+                        setSheetState(() => _screenSecurityEnabled = value);
+                        setState(() {});
+                        _showSettingSavedSnackbar('Screen security ${value ? 'enabled' : 'disabled'}');
+                      },
+                    ),
+                    _buildPrivacyToggle(
+                      Icons.analytics_outlined,
+                      'Share Analytics',
+                      'Help improve the app anonymously',
+                      _shareAnalytics,
+                      (value) {
+                        setSheetState(() => _shareAnalytics = value);
+                        setState(() {});
+                        _showSettingSavedSnackbar('Analytics ${value ? 'enabled' : 'disabled'}');
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildPrivacyOptionWithAction(
+                      Icons.fingerprint_rounded, 
+                      'Biometric Login', 
+                      'Use fingerprint or face ID',
+                      onTap: () => _showComingSoonDialog('Biometric Login'),
+                    ),
+                    _buildPrivacyOptionWithAction(
+                      Icons.lock_clock_rounded, 
+                      'App Lock', 
+                      'Set PIN or pattern lock',
+                      onTap: () => _showComingSoonDialog('App Lock'),
+                    ),
+                    _buildPrivacyOptionWithAction(
+                      Icons.cleaning_services_rounded, 
+                      'Clear Cache', 
+                      'Free up storage space',
+                      onTap: () => _showClearCacheDialog(),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Privacy toggle states (frontend only)
+  bool _hideSensitiveData = false;
+  bool _screenSecurityEnabled = false;
+  bool _shareAnalytics = true;
+
+  void _showSettingSavedSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Text(message),
           ],
         ),
+        backgroundColor: const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _showClearCacheDialog() {
+    Navigator.pop(context);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: blueAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.cleaning_services_rounded, color: blueAccent, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Text('Clear Cache', style: TextStyle(fontWeight: FontWeight.w700)),
+          ],
+        ),
+        content: const Text(
+          'This will clear temporary files and cached images. Your account data and test results will not be affected.',
+          style: TextStyle(color: Colors.black54, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: Colors.black.withOpacity(0.5))),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _performClearCache();
+            },
+            child: const Text('Clear', style: TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _performClearCache() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: const Padding(
+          padding: EdgeInsets.all(24),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('Clearing cache...'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Simulate cache clearing
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Text('Cache cleared successfully'),
+            ],
+          ),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
+  Widget _buildPrivacyToggle(IconData icon, String title, String subtitle, bool value, Function(bool) onChanged) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: blueAccent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: blueAccent, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withOpacity(0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeColor: blueAccent,
+          ),
+        ],
       ),
     );
   }
@@ -775,109 +966,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showDeleteAccountDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEE2E2),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Icon(
-                  Icons.warning_amber_rounded,
-                  color: Color(0xFFDC2626),
-                  size: 32,
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Delete Account?',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'This action cannot be undone. All your data, test results, and reports will be permanently deleted.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.black.withOpacity(0.6),
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: bgColor,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'Cancel',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.pop(context);
-                        // TODO: Call delete account API
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDC2626),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'Delete',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
@@ -3053,39 +3141,25 @@ class _SubmitFeedbackScreenState extends State<SubmitFeedbackScreen> with Single
   int _currentPage = 1;
   int _totalPages = 1;
 
-  // ✅ UPDATED: Added 'Test Quality' to match your SQL schema
-  final List<String> _categories = [
-    'General', 
-    'Bug Report', 
-    'Feature Request', 
-    'UI/UX', 
-    'Test Quality',  // ← ADDED THIS
-    'Performance', 
-    'Other'
-  ];
+  final List<String> _categories = ['General', 'Bug Report', 'Feature Request', 'UI/UX', 'Performance', 'Other'];
 
-  // ✅ UPDATED: Added test_quality mapping
   final Map<String, String> _categoryMap = {
     'General': 'general',
     'Bug Report': 'bug_report',
     'Feature Request': 'feature_request',
     'UI/UX': 'ui_ux',
-    'Test Quality': 'test_quality',  // ← ADDED THIS
     'Performance': 'performance',
     'Other': 'other',
   };
 
-  // ✅ UPDATED: Added test_quality reverse mapping
   final Map<String, String> _reverseCategoryMap = {
     'general': 'General',
     'bug_report': 'Bug Report',
     'feature_request': 'Feature Request',
     'ui_ux': 'UI/UX',
-    'test_quality': 'Test Quality',  // ← ADDED THIS
     'performance': 'Performance',
     'other': 'Other',
   };
-
 
   @override
   void initState() {
